@@ -420,7 +420,7 @@
   </section>
 </div>
 
-<video id="webcam" style="display:none;"></video>
+<video id="webcam" autoplay muted playsinline style="display:none; width:640px; height:480px;"></video>
 
 <script>
 // ══════════════════════════════════════════════════════════════════
@@ -1150,15 +1150,30 @@ document.addEventListener('DOMContentLoaded', init);
 </script>
 <script>
 // ══════════════════════════════════════════════════════════════════
-// GESTURE CONTROL WITH MEDIAPIPE
+// GESTURE CONTROL WITH MEDIAPIPE - THUMBS UP/DOWN
 // ══════════════════════════════════════════════════════════════════
-let hands, camera;
+let hands;
 let lastGestureTime = 0;
-const gestureCooldown = 1000;
+const gestureCooldown = 800;
+let isGestureActive = false;
 
 async function initGestures() {
+  console.log('🚀 Starting gesture init...');
+  
   try {
-    const videoElement = document.getElementById('webcam');
+    const video = document.getElementById('webcam');
+    if (!video) {
+      console.error('❌ Video element not found');
+      return;
+    }
+    
+    if (typeof Hands === 'undefined') {
+      console.log('⏳ Waiting for MediaPipe...');
+      setTimeout(initGestures, 500);
+      return;
+    }
+    
+    console.log('✅ Hands loaded');
     
     hands = new Hands({
       locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4/${file}`
@@ -1166,83 +1181,102 @@ async function initGestures() {
 
     hands.setOptions({
       maxNumHands: 1,
-      modelComplexity: 1,
-      minDetectionConfidence: 0.7,
+      modelComplexity: 0,
+      minDetectionConfidence: 0.5,
       minTrackingConfidence: 0.5
     });
 
     hands.onResults(onResults);
 
-    camera = new Camera(videoElement, {
-      onFrame: async () => {
-        await hands.send({image: videoElement});
-      },
-      width: 640,
-      height: 480
+    // Get camera stream
+    const stream = await navigator.mediaDevices.getUserMedia({ 
+      video: { width: 640, height: 480 } 
     });
-
-    await camera.initialize();
-    await camera.start();
-    toast('🎥 Camera ready! Thumbs up/down to navigate.');
-    console.log('✅ MediaPipe initialized');
+    
+    video.srcObject = stream;
+    console.log('✅ Camera stream active');
+    
+    isGestureActive = true;
+    toast('🎥 Gesture control ON! Show thumbs up/down');
+    
+    // Process frames continuously
+    const processFrame = async () => {
+      if (isGestureActive && video.readyState === video.HAVE_ENOUGH_DATA) {
+        await hands.send({ image: video });
+      }
+      requestAnimationFrame(processFrame);
+    };
+    processFrame();
+    
   } catch (err) {
-    console.error('❌ Error:', err);
-    toast('⚠️ Check browser console for errors');
+    console.error('❌ Gesture error:', err.message);
+    toast('⚠️ Camera error: ' + err.message);
   }
 }
 
 function onResults(results) {
-  if (results.multiHandLandmarks?.[0]) {
-    const landmarks = results.multiHandLandmarks[0];
-    const handedness = results.multiHandedness?.[0];
-    const gesture = detectGesture(landmarks, handedness?.label);
-    
-    if (gesture && Date.now() - lastGestureTime > gestureCooldown) {
-      lastGestureTime = Date.now();
-      handleGesture(gesture);
-    }
+  if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0) return;
+  
+  const landmarks = results.multiHandLandmarks[0];
+  const gesture = detectGesture(landmarks);
+  
+  if (gesture && Date.now() - lastGestureTime > gestureCooldown) {
+    console.log('🎯 Detected:', gesture);
+    lastGestureTime = Date.now();
+    handleGesture(gesture);
   }
 }
 
-function detectGesture(landmarks, handedness) {
-  const thumbTip = landmarks[4];
-  const thumbPip = landmarks[3];
-  const indexTip = landmarks[8];
-  const middleTip = landmarks[12];
+function detectGesture(landmarks) {
+  // Hand landmarks: thumb=0-4, index=5-8, middle=9-12, ring=13-16, pinky=17-20
+  // Each finger: mcp, pip, dip, tip
+  const thumbTip = landmarks[4].y;      // Index 4: thumb tip
+  const thumbIP = landmarks[3].y;       // Index 3: thumb IP joint
+  const wrist = landmarks[0].y;         // Index 0: wrist
   
-  const otherFingersClosed = indexTip.y > thumbTip.y && middleTip.y > thumbTip.y;
+  // Other fingers (need to check tips are below thumb)
+  const indexTip = landmarks[8].y;
+  const middleTip = landmarks[12].y;
+  const ringTip = landmarks[16].y;
+  const pinkyTip = landmarks[20].y;
   
-  if (thumbTip.y < thumbPip.y - 0.1 && otherFingersClosed) {
-    return 'next';
-  } else if (thumbTip.y > thumbPip.y + 0.1 && otherFingersClosed) {
-    return 'prev';
+  // Check if other fingers are extended down (away from thumb)
+  const otherFingersDown = indexTip > thumbTip && middleTip > thumbTip && ringTip > thumbTip && pinkyTip > thumbTip;
+  
+  // THUMBS UP: thumb tip is well above wrist
+  if (thumbTip < wrist - 0.2 && otherFingersDown && thumbTip < thumbIP - 0.12) {
+    return 'up';
   }
+  
+  // THUMBS DOWN: thumb tip is well below wrist  
+  if (thumbTip > wrist + 0.2 && otherFingersDown && thumbTip > thumbIP + 0.12) {
+    return 'down';
+  }
+  
   return null;
 }
 
 function handleGesture(gesture) {
   const currentIndex = SECS.indexOf(S.cur);
-  if (gesture === 'next' && currentIndex < SECS.length - 1) {
+  
+  if (gesture === 'up' && currentIndex < SECS.length - 1) {
     go(SECS[currentIndex + 1]);
     toast('👍 Next!');
-  } else if (gesture === 'prev' && currentIndex > 0) {
+  } else if (gesture === 'down' && currentIndex > 0) {
     go(SECS[currentIndex - 1]);
     toast('👎 Back!');
   }
 }
 
-window.addEventListener('load', () => {
-  setTimeout(() => {
-    if (typeof Hands !== 'undefined' && typeof Camera !== 'undefined') {
-      initGestures();
-    } else {
-      console.error('MediaPipe not loaded');
-    }
-  }, 500);
-});
+// Start gesture control when scripts are loaded
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', () => {
+    setTimeout(() => initGestures(), 1500);
+  });
+} else {
+  setTimeout(() => initGestures(), 1500);
+}
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4/hands.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.4/camera_utils.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils@0.3/drawing_utils.js"></script>
 <script src="https://replit-cdn.com/replit-pill/replit-pill.global.js" data-referral-code="ttr3ynfkk209" data-repl-id="c5df46d4-4675-4745-9883-a8d0aa3bf15b"></script></body>
 </html>
