@@ -1,0 +1,1248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Voyager — Immersive Travel Experience</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg-deep: #020b18;
+      --bg-card: rgba(8,22,42,0.88);
+      --neon: #00b4ff;
+      --neon-dim: #0080c8;
+      --neon-glow: rgba(0,180,255,0.38);
+      --neon-strong: rgba(0,180,255,0.7);
+      --text: #e8f4ff;
+      --text-sec: rgba(232,244,255,0.65);
+      --text-mute: rgba(232,244,255,0.32);
+      --border: rgba(0,180,255,0.14);
+      --border-g: rgba(0,180,255,0.42);
+      --font-d: 'Space Grotesk', sans-serif;
+      --font-b: 'Inter', sans-serif;
+    }
+
+    html, body { width:100%; height:100%; overflow:hidden; background:var(--bg-deep); color:var(--text); font-family:var(--font-b); cursor:none; }
+    #app { width:100%; height:100vh; position:relative; overflow:hidden; }
+
+    /* ─── CUSTOM CURSOR (Hype Decay style) ───────────── */
+    #cur-dot {
+      position:fixed; width:7px; height:7px; border-radius:50%;
+      background:#fff; pointer-events:none; z-index:99999;
+      transform:translate(-50%,-50%);
+      box-shadow:0 0 10px var(--neon),0 0 22px var(--neon-glow);
+      transition:width .15s,height .15s,background .15s;
+      will-change:transform;
+    }
+    #cur-ring {
+      position:fixed; width:38px; height:38px; border-radius:50%;
+      border:1.5px solid rgba(0,180,255,.65); pointer-events:none; z-index:99998;
+      transform:translate(-50%,-50%);
+      transition:width .28s cubic-bezier(.4,0,.2,1),height .28s cubic-bezier(.4,0,.2,1),
+                 border-color .28s,opacity .3s;
+      will-change:transform;
+    }
+    body:not(.on-canvas) #cur-ring { opacity:.55; }
+    body.cur-hover #cur-ring { width:58px; height:58px; border-color:var(--neon); opacity:.9; }
+    body.cur-hover #cur-dot  { width:5px; height:5px; background:var(--neon); }
+    body.cur-click #cur-ring { width:22px; height:22px; border-color:#fff; opacity:1; transition:width .08s,height .08s; }
+
+    /* ─── LOADING ────────────────────────────────────── */
+    #loading {
+      position:fixed; inset:0; background:var(--bg-deep);
+      display:flex; flex-direction:column; align-items:center; justify-content:center;
+      z-index:9999; transition:opacity .8s ease,visibility .8s ease;
+    }
+    #loading.gone { opacity:0; visibility:hidden; pointer-events:none; }
+    .ld-logo { font-family:var(--font-d); font-size:2.6rem; font-weight:700; letter-spacing:.18em; color:var(--neon); text-shadow:0 0 30px var(--neon-strong),0 0 70px var(--neon-glow); margin-bottom:1.6rem; animation:pulseg 2s ease-in-out infinite; }
+    .ld-sub  { font-size:.78rem; letter-spacing:.22em; text-transform:uppercase; color:var(--text-sec); margin-bottom:1.8rem; }
+    .ld-bar-wrap { width:200px; height:2px; background:rgba(0,180,255,.14); border-radius:2px; overflow:hidden; }
+    .ld-bar  { height:100%; background:linear-gradient(90deg,var(--neon-dim),var(--neon)); box-shadow:0 0 12px var(--neon-strong); animation:ldprog 2.8s ease forwards; }
+    @keyframes ldprog { 0%{width:0} 60%{width:72%} 100%{width:100%} }
+    @keyframes pulseg  { 0%,100%{text-shadow:0 0 30px var(--neon-strong),0 0 70px var(--neon-glow)} 50%{text-shadow:0 0 55px var(--neon-strong),0 0 110px var(--neon-glow),0 0 4px #fff} }
+
+    /* ─── SECTIONS ───────────────────────────────────── */
+    .sec { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; opacity:0; pointer-events:none; transition:opacity .55s ease; overflow-y:auto; }
+    .sec.on { opacity:1; pointer-events:all; }
+
+    /* ─── TOASTS ─────────────────────────────────────── */
+    #toasts { position:fixed; top:1.4rem; right:1.4rem; z-index:8888; display:flex; flex-direction:column; gap:.45rem; }
+    .toast { background:rgba(8,22,42,.95); border:1px solid var(--border-g); border-radius:10px; padding:.7rem 1.2rem; color:var(--text); font-size:.83rem; font-weight:500; box-shadow:0 4px 22px rgba(0,180,255,.18); animation:tin .3s ease forwards; backdrop-filter:blur(10px); }
+    .toast.out { animation:tout .3s ease forwards; }
+    @keyframes tin  { from{transform:translateX(110%);opacity:0} to{transform:translateX(0);opacity:1} }
+    @keyframes tout { from{transform:translateX(0);opacity:1} to{transform:translateX(110%);opacity:0} }
+
+    /* ─── NAV DOTS ───────────────────────────────────── */
+    #nav { position:fixed; right:1.3rem; top:50%; transform:translateY(-50%); z-index:1000; display:none; flex-direction:column; gap:.45rem; }
+    .nd { width:6px; height:6px; border-radius:3px; background:rgba(255,255,255,.18); cursor:none; transition:all .3s ease; }
+    .nd.on { background:var(--neon); height:18px; box-shadow:0 0 8px var(--neon-glow); }
+    .nd:hover { background:rgba(0,180,255,.55); }
+
+    /* ─── BACK BTN ───────────────────────────────────── */
+    #back { position:fixed; top:1.4rem; left:1.4rem; z-index:1000; width:40px; height:40px; border-radius:10px; background:rgba(8,22,42,.8); border:1px solid var(--border); color:var(--text-sec); cursor:none; display:none; align-items:center; justify-content:center; font-size:1.15rem; transition:all .2s; backdrop-filter:blur(10px); }
+    #back:hover { border-color:var(--neon); color:var(--neon); }
+    #gav { position:fixed; top:1.4rem; left:1.4rem; z-index:1000; display:none; }
+    #gav .bub { width:44px; height:44px; border-radius:50%; background:rgba(8,22,42,.9); border:2px solid var(--border-g); display:flex; align-items:center; justify-content:center; font-size:1.5rem; box-shadow:0 0 16px var(--neon-glow); cursor:none; backdrop-filter:blur(10px); transition:all .3s; }
+    #gav .bub:hover { transform:scale(1.1); box-shadow:0 0 26px var(--neon-strong); }
+    #step { position:fixed; bottom:1.4rem; left:50%; transform:translateX(-50%); z-index:1000; font-size:.68rem; font-weight:600; letter-spacing:.18em; text-transform:uppercase; color:var(--text-mute); display:none; }
+
+    /* ─── GLOBE ──────────────────────────────────────── */
+    #s-globe { background:radial-gradient(ellipse at center,#031428 0%,#020b18 70%); }
+    #globe-c { position:absolute; inset:0; width:100%; height:100%; }
+    .gh { position:absolute; z-index:10; text-align:center; top:3.5rem; left:0; right:0; }
+    .gh h1 { font-family:var(--font-d); font-size:.95rem; font-weight:500; letter-spacing:.38em; text-transform:uppercase; color:var(--neon); text-shadow:0 0 22px var(--neon-glow); margin-bottom:.35rem; }
+    .gh p { font-size:.76rem; color:var(--text-mute); letter-spacing:.1em; }
+    .country-label { position:absolute; transform:translate(-50%,-50%); pointer-events:all; cursor:none; text-align:center; z-index:5; }
+    .country-label .dot { width:10px; height:10px; background:var(--neon); border-radius:50%; margin:0 auto 6px; box-shadow:0 0 10px var(--neon-strong),0 0 22px var(--neon-glow); animation:dpulse 2s ease-in-out infinite; transition:transform .2s; }
+    .country-label:hover .dot { transform:scale(1.7); background:#fff; }
+    .country-label .nm { font-family:var(--font-d); font-size:.68rem; font-weight:600; letter-spacing:.12em; color:var(--text); white-space:nowrap; background:rgba(2,11,24,.62); padding:2px 8px; border-radius:4px; border:1px solid var(--border); transition:all .2s; }
+    .country-label:hover .nm { color:var(--neon); border-color:var(--border-g); }
+    @keyframes dpulse { 0%,100%{box-shadow:0 0 10px var(--neon-strong),0 0 22px var(--neon-glow)} 50%{box-shadow:0 0 20px var(--neon-strong),0 0 44px var(--neon-glow)} }
+    .ghint { position:absolute; bottom:2rem; left:50%; transform:translateX(-50%); z-index:10; text-align:center; }
+    .ghint p { font-size:.76rem; letter-spacing:.16em; text-transform:uppercase; color:var(--text-mute); animation:fh 3s ease-in-out infinite; }
+    @keyframes fh { 0%,100%{transform:translateY(0);opacity:.45} 50%{transform:translateY(-5px);opacity:1} }
+
+    /* ─── CLICK BURST (Hype Decay inspired) ─────────── */
+    #burst-canvas { position:fixed; inset:0; pointer-events:none; z-index:9000; }
+
+    /* ─── INTENT ─────────────────────────────────────── */
+    #s-intent { background:radial-gradient(ellipse at 40% 50%,#031428 0%,#020b18 80%); }
+    .particles { position:absolute; inset:0; overflow:hidden; pointer-events:none; }
+    .par { position:absolute; border-radius:50%; animation:parfloat linear infinite; opacity:0; }
+    @keyframes parfloat { 0%{transform:translateY(100vh) translateX(0);opacity:0} 10%{opacity:.55} 90%{opacity:.28} 100%{transform:translateY(-100px) translateX(var(--d));opacity:0} }
+    .int-wrap { text-align:center; max-width:640px; padding:2rem; position:relative; z-index:2; }
+    .int-badge { display:inline-flex; align-items:center; gap:.5rem; font-size:.73rem; font-weight:600; letter-spacing:.2em; text-transform:uppercase; color:var(--neon); border:1px solid var(--border-g); border-radius:100px; padding:.38rem 1rem; margin-bottom:1.8rem; background:rgba(0,180,255,.06); opacity:0; animation:fup .5s .2s ease forwards; }
+    .int-q { font-family:var(--font-d); font-size:clamp(2rem,5vw,3.4rem); font-weight:700; line-height:1.15; color:var(--text); margin-bottom:1.4rem; min-height:4rem; }
+    .int-q .wd { display:inline-block; opacity:0; transform:translateY(20px); margin-right:.35em; transition:opacity .4s ease,transform .4s ease; }
+    .int-q .wd.v { opacity:1; transform:translateY(0); }
+    .int-q .hl { color:var(--neon); text-shadow:0 0 30px var(--neon-glow); }
+    .int-sub { font-size:.95rem; color:var(--text-sec); margin-bottom:2.8rem; opacity:0; animation:fup .5s 1.2s ease forwards; }
+    @keyframes fup { from{opacity:0;transform:translateY(20px)} to{opacity:1;transform:translateY(0)} }
+
+    /* ─── BUTTON ─────────────────────────────────────── */
+    .cta { display:inline-flex; align-items:center; gap:.7rem; font-family:var(--font-d); font-size:.92rem; font-weight:600; letter-spacing:.1em; text-transform:uppercase; color:var(--bg-deep); background:linear-gradient(135deg,var(--neon),var(--neon-dim)); border:none; border-radius:50px; padding:.95rem 2.4rem; cursor:none; box-shadow:0 0 30px var(--neon-glow),0 4px 20px rgba(0,180,255,.28); transition:all .3s ease; opacity:0; animation:fup .5s 1.5s ease forwards; }
+    .cta:hover { transform:translateY(-3px) scale(1.03); box-shadow:0 0 52px var(--neon-strong),0 8px 30px rgba(0,180,255,.38); }
+    .cta:active { transform:scale(.98); }
+    .cta.noanim { opacity:1; animation:none; }
+    .cta svg { width:17px; height:17px; }
+
+    /* ─── VEHICLE ────────────────────────────────────── */
+    #s-vehicle { background:#020b18; overflow:hidden; }
+    .vscene { position:relative; width:100%; height:100%; overflow:hidden; }
+    .vsky { position:absolute; inset:0 0 40% 0; background:linear-gradient(to bottom,#010810 0%,#021828 60%,#041f38 100%); }
+    .vstars { position:absolute; inset:0; background-image:radial-gradient(1px 1px at 18% 22%,rgba(255,255,255,.8) 0%,transparent 100%),radial-gradient(1px 1px at 78% 12%,rgba(255,255,255,.6) 0%,transparent 100%),radial-gradient(1.5px 1.5px at 50% 18%,rgba(255,255,255,.9) 0%,transparent 100%),radial-gradient(1px 1px at 12% 58%,rgba(255,255,255,.4) 0%,transparent 100%),radial-gradient(1px 1px at 88% 48%,rgba(255,255,255,.7) 0%,transparent 100%),radial-gradient(1px 1px at 33% 7%,rgba(255,255,255,.5) 0%,transparent 100%),radial-gradient(1px 1px at 65% 38%,rgba(255,255,255,.6) 0%,transparent 100%),radial-gradient(1px 1px at 24% 78%,rgba(255,255,255,.35) 0%,transparent 100%); }
+    .vroad { position:absolute; bottom:0; left:0; right:0; height:42%; background:linear-gradient(to bottom,#0a1a2e 0%,#060f1c 100%); }
+    .vrl { position:absolute; left:50%; transform:translateX(-50%); width:6px; background:rgba(255,228,90,.7); border-radius:3px; animation:rscroll .42s linear infinite; }
+    .vrl:nth-child(1){top:8%;height:40px;animation-delay:0s} .vrl:nth-child(2){top:28%;height:40px;animation-delay:-.14s} .vrl:nth-child(3){top:48%;height:40px;animation-delay:-.28s} .vrl:nth-child(4){top:68%;height:40px;animation-delay:-.07s} .vrl:nth-child(5){top:84%;height:30px;animation-delay:-.21s}
+    @keyframes rscroll { 0%{transform:translateX(-50%) translateY(0)} 100%{transform:translateX(-50%) translateY(62px)} }
+    .vre { position:absolute; top:0; width:3px; height:100%; background:rgba(0,180,255,.38); box-shadow:0 0 10px var(--neon-glow); }
+    .vre.l{left:14%} .vre.r{right:14%}
+    .vcar { position:absolute; bottom:36%; left:50%; transform:translateX(-50%); z-index:10; filter:drop-shadow(0 0 18px var(--neon-glow)) drop-shadow(0 10px 20px rgba(0,0,0,.5)); animation:vhover 3s ease-in-out infinite,vent 1s ease forwards; }
+    @keyframes vent  { from{opacity:0;transform:translateX(-50%) translateY(60px)} to{opacity:1;transform:translateX(-50%) translateY(0)} }
+    @keyframes vhover { 0%,100%{filter:drop-shadow(0 0 18px var(--neon-glow))} 50%{filter:drop-shadow(0 0 28px var(--neon-strong))} }
+    .spd-line { position:absolute; height:1px; background:linear-gradient(90deg,transparent,rgba(0,180,255,.38),transparent); animation:spd linear infinite; }
+    @keyframes spd { from{transform:translateX(100%);opacity:0} 10%{opacity:1} 90%{opacity:1} to{transform:translateX(-100%);opacity:0} }
+    .vstatus { position:absolute; bottom:9%; left:50%; transform:translateX(-50%); text-align:center; z-index:10; }
+    .vstatus h2 { font-family:var(--font-d); font-size:1.15rem; font-weight:600; color:var(--neon); text-shadow:0 0 22px var(--neon-glow); letter-spacing:.15em; text-transform:uppercase; }
+    .vstatus p  { font-size:.76rem; color:var(--text-mute); letter-spacing:.2em; text-transform:uppercase; margin-top:.35rem; }
+
+    /* ─── DURATION ───────────────────────────────────── */
+    #s-dur { background:radial-gradient(ellipse at 60% 40%,#031428 0%,#020b18 70%); }
+    .dur-wrap { text-align:center; max-width:520px; padding:2rem; position:relative; z-index:2; }
+    .glow-ln { width:80px; height:2px; background:linear-gradient(90deg,transparent,var(--neon),transparent); margin:0 auto 2rem; box-shadow:0 0 8px var(--neon-glow); }
+    .dur-q { font-family:var(--font-d); font-size:clamp(1.6rem,4vw,2.6rem); font-weight:700; line-height:1.2; color:var(--text); margin-bottom:2.4rem; min-height:3.5rem; }
+    .dur-q .ch { display:inline-block; opacity:0; animation:chin .05s ease forwards; }
+    @keyframes chin { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+    .dur-ig { display:flex; align-items:center; gap:1rem; margin-bottom:1.8rem; justify-content:center; }
+    .dur-in { font-family:var(--font-d); font-size:2.4rem; font-weight:700; width:110px; background:rgba(0,180,255,.05); border:2px solid var(--border); border-radius:12px; color:var(--neon); text-align:center; padding:.7rem; outline:none; transition:all .3s; caret-color:var(--neon); cursor:none; }
+    .dur-in:focus { border-color:var(--neon); box-shadow:0 0 0 4px rgba(0,180,255,.14); background:rgba(0,180,255,.08); }
+    .dur-lbl { font-size:1.15rem; font-weight:500; color:var(--text-sec); }
+    .dur-pre { display:flex; gap:.7rem; justify-content:center; margin-bottom:2.4rem; flex-wrap:wrap; }
+    .pre-btn { font-family:var(--font-d); font-size:.78rem; font-weight:600; color:var(--text-sec); background:rgba(0,180,255,.05); border:1px solid var(--border); border-radius:8px; padding:.45rem .95rem; cursor:none; transition:all .2s; }
+    .pre-btn:hover { border-color:var(--neon); color:var(--neon); background:rgba(0,180,255,.1); }
+
+    /* ─── TIMELINE ───────────────────────────────────── */
+    #s-tl { background:radial-gradient(ellipse at 30% 60%,#031428 0%,#020b18 80%); justify-content:flex-start; padding-top:4.5rem; padding-bottom:3rem; }
+    .tl-hd { text-align:center; margin-bottom:2.8rem; width:100%; padding:0 1rem; }
+    .tl-hd h2 { font-family:var(--font-d); font-size:1.9rem; font-weight:700; color:var(--text); margin-bottom:.4rem; }
+    .tl-hd h2 span { color:var(--neon); text-shadow:0 0 20px var(--neon-glow); }
+    .tl-hd p { font-size:.88rem; color:var(--text-sec); }
+    .tl-wrap { position:relative; max-width:600px; width:100%; margin:0 auto; padding:0 1.5rem; }
+    .tl-line { position:absolute; left:calc(1.5rem + 1.15rem); top:0; bottom:0; width:2px; background:linear-gradient(to bottom,var(--neon),rgba(0,180,255,.08)); box-shadow:0 0 8px rgba(0,180,255,.28); }
+    .tl-item { display:flex; gap:1.4rem; margin-bottom:1.8rem; opacity:0; transform:translateX(-28px); transition:opacity .5s ease,transform .5s ease; }
+    .tl-item.v { opacity:1; transform:translateX(0); }
+    .tl-dot { width:2.3rem; height:2.3rem; min-width:2.3rem; border-radius:50%; background:var(--bg-deep); border:2px solid var(--neon); display:flex; align-items:center; justify-content:center; font-size:.95rem; box-shadow:0 0 14px var(--neon-glow); position:relative; z-index:1; }
+    .tl-body { background:var(--bg-card); border:1px solid var(--border); border-radius:12px; padding:1.1rem 1.3rem; flex:1; transition:border-color .3s,box-shadow .3s; backdrop-filter:blur(10px); }
+    .tl-body:hover { border-color:var(--border-g); box-shadow:0 0 20px rgba(0,180,255,.09); }
+    .day-tag { font-size:.67rem; font-weight:700; letter-spacing:.2em; text-transform:uppercase; color:var(--neon); margin-bottom:.35rem; }
+    .tl-body h3 { font-family:var(--font-d); font-size:1rem; font-weight:600; color:var(--text); margin-bottom:.3rem; }
+    .tl-body p  { font-size:.83rem; color:var(--text-sec); line-height:1.6; }
+    .tl-tags { display:flex; gap:.38rem; flex-wrap:wrap; margin-top:.65rem; }
+    .tag { font-size:.67rem; font-weight:600; letter-spacing:.07em; text-transform:uppercase; color:var(--neon); background:rgba(0,180,255,.07); border:1px solid rgba(0,180,255,.18); border-radius:100px; padding:.18rem .55rem; }
+    .tl-cta { max-width:600px; width:100%; margin:1rem auto 0; display:flex; justify-content:center; padding:0 1.5rem; }
+
+    /* ─── JOURNEY ────────────────────────────────────── */
+    #s-jrn { background:#020b18; overflow:hidden; }
+    .jscene { position:relative; width:100%; height:100%; overflow:hidden; }
+    .jbg { position:absolute; inset:0; background:linear-gradient(to right,#031428,#020b18,#031428); }
+    .jroad { position:absolute; bottom:0; left:0; right:0; height:35%; background:linear-gradient(to bottom,#0c1e34,#060f1c); }
+    .jv { position:absolute; bottom:32%; animation:jmove 4.2s .5s ease forwards; left:-220px; }
+    @keyframes jmove { 0%{left:-220px} 72%{left:38%} 86%{left:40%} 100%{left:38%} }
+    .jprog { position:absolute; top:14%; left:50%; transform:translateX(-50%); text-align:center; z-index:5; }
+    .jprog h2 { font-family:var(--font-d); font-size:.98rem; font-weight:500; letter-spacing:.22em; text-transform:uppercase; color:var(--text-sec); }
+    .jpb { width:200px; height:2px; background:rgba(0,180,255,.14); border-radius:2px; margin:.7rem auto 0; overflow:hidden; }
+    .jpbf { height:100%; background:linear-gradient(90deg,var(--neon-dim),var(--neon)); box-shadow:0 0 8px var(--neon-glow); animation:jprog 4.2s .5s ease forwards; width:0; }
+    @keyframes jprog { to{width:100%} }
+    .jdest { position:absolute; right:5%; top:50%; transform:translateY(-50%); text-align:center; z-index:5; }
+    .jdball { width:140px; height:140px; border-radius:50%; background:rgba(0,180,255,.07); border:1px solid var(--border-g); display:flex; align-items:center; justify-content:center; font-size:3.8rem; margin:0 auto .8rem; box-shadow:0 0 42px var(--neon-glow); animation:dpulse2 2s ease-in-out infinite; }
+    @keyframes dpulse2 { 0%,100%{box-shadow:0 0 42px var(--neon-glow)} 50%{box-shadow:0 0 62px var(--neon-strong),0 0 120px rgba(0,180,255,.2)} }
+    .jdname { font-family:var(--font-d); font-size:1.15rem; font-weight:700; color:var(--neon); text-shadow:0 0 20px var(--neon-glow); letter-spacing:.1em; }
+
+    /* ─── CUBE (with drag) ───────────────────────────── */
+    #s-cube { background:radial-gradient(ellipse at center,#031428 0%,#020b18 70%); justify-content:flex-start; padding-top:4rem; padding-bottom:3rem; }
+    .cube-hd { text-align:center; margin-bottom:2.8rem; width:100%; padding:0 1rem; }
+    .cube-hd h2 { font-family:var(--font-d); font-size:1.9rem; font-weight:700; color:var(--text); margin-bottom:.4rem; }
+    .cube-hd p  { font-size:.88rem; color:var(--text-sec); }
+    .cube-wp { perspective:1000px; width:240px; height:240px; margin:0 auto 2rem; touch-action:none; }
+    .cube3 { width:100%; height:100%; position:relative; transform-style:preserve-3d; will-change:transform; }
+    .cube3.auto { animation:crot 12s linear infinite; }
+    @keyframes crot { 0%{transform:rotateX(-15deg) rotateY(0deg)} 100%{transform:rotateX(-15deg) rotateY(360deg)} }
+    .cf { position:absolute; width:240px; height:240px; background:var(--bg-card); border:1px solid var(--border-g); border-radius:14px; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:1.3rem; text-align:center; box-shadow:0 0 28px rgba(0,180,255,.1); overflow:hidden; backdrop-filter:blur(10px); transition:box-shadow .3s; }
+    .cf.fr{transform:rotateY(0deg)   translateZ(120px)} .cf.bk{transform:rotateY(180deg) translateZ(120px)}
+    .cf.lf{transform:rotateY(-90deg) translateZ(120px)} .cf.rt{transform:rotateY(90deg)  translateZ(120px)}
+    .cf.tp{transform:rotateX(90deg)  translateZ(120px)} .cf.bt{transform:rotateX(-90deg) translateZ(120px)}
+    .cf-mu { position:absolute; top:.65rem; right:.65rem; font-size:.58rem; font-weight:700; letter-spacing:.09em; text-transform:uppercase; color:var(--neon); background:rgba(0,180,255,.11); border:1px solid rgba(0,180,255,.28); border-radius:100px; padding:.14rem .48rem; }
+    .cf-em { font-size:2.8rem; margin-bottom:.65rem; }
+    .cf-tt { font-family:var(--font-d); font-size:.92rem; font-weight:700; color:var(--text); margin-bottom:.28rem; }
+    .cf-ds { font-size:.7rem; color:var(--text-sec); line-height:1.5; }
+    .cube-ctrl { display:flex; gap:.45rem; justify-content:center; margin-bottom:.8rem; }
+    .cbtn { width:34px; height:34px; border-radius:50%; border:1px solid var(--border); background:rgba(0,180,255,.05); color:var(--text-sec); cursor:none; display:flex; align-items:center; justify-content:center; font-size:.8rem; transition:all .2s; }
+    .cbtn:hover { border-color:var(--neon); color:var(--neon); background:rgba(0,180,255,.1); }
+    .cube-hint { text-align:center; font-size:.7rem; color:var(--text-mute); letter-spacing:.12em; margin-bottom:1.4rem; }
+
+    /* ─── CARDS (with 3D tilt – Hype Decay bento style) ─ */
+    #s-cards { background:radial-gradient(ellipse at 70% 30%,#031428 0%,#020b18 70%); justify-content:flex-start; padding-top:4rem; padding-bottom:4rem; }
+    .cards-hd { text-align:center; margin-bottom:2.8rem; width:100%; padding:0 1.5rem; }
+    .cards-hd h2 { font-family:var(--font-d); font-size:1.9rem; font-weight:700; color:var(--text); margin-bottom:.4rem; }
+    .cards-hd p  { font-size:.88rem; color:var(--text-sec); }
+    .cards-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(250px,1fr)); gap:1.4rem; max-width:860px; width:100%; padding:0 1.5rem; margin:0 auto; }
+    .icard { background:var(--bg-card); border:1px solid var(--border); border-radius:16px; padding:1.4rem; cursor:none; transition:border-color .3s,box-shadow .3s; position:relative; overflow:hidden; backdrop-filter:blur(10px); transform-style:preserve-3d; will-change:transform; }
+    .icard::before { content:''; position:absolute; inset:0; background:linear-gradient(135deg,rgba(0,180,255,.07),transparent); opacity:0; transition:opacity .3s; border-radius:16px; }
+    .icard:hover::before { opacity:1; }
+    .icard:hover { border-color:var(--border-g); box-shadow:0 20px 60px rgba(0,180,255,.14),0 0 0 1px rgba(0,180,255,.18); }
+    .ic-icon { font-size:2.4rem; margin-bottom:.9rem; }
+    .ic-type { font-size:.63rem; font-weight:700; letter-spacing:.2em; text-transform:uppercase; color:var(--neon); margin-bottom:.45rem; }
+    .icard h3 { font-family:var(--font-d); font-size:1.05rem; font-weight:700; color:var(--text); margin-bottom:.42rem; }
+    .ic-prev { font-size:.83rem; color:var(--text-sec); line-height:1.6; }
+    .ic-exp  { margin-top:.9rem; border-top:1px solid var(--border); padding-top:.9rem; font-size:.8rem; color:var(--text-sec); line-height:1.7; max-height:0; overflow:hidden; transition:max-height .4s ease; }
+    .icard:hover .ic-exp { max-height:220px; }
+    .ic-tip { display:flex; align-items:flex-start; gap:.45rem; margin-top:.45rem; padding:.45rem; background:rgba(0,180,255,.05); border-radius:8px; border-left:2px solid var(--neon); font-size:.76rem; color:var(--text-sec); }
+
+    /* ─── AVATAR ─────────────────────────────────────── */
+    .av-sec { max-width:860px; width:100%; padding:1.8rem 1.5rem; margin:0 auto; text-align:center; }
+    .av-sec h3 { font-family:var(--font-d); font-size:1.15rem; font-weight:700; color:var(--text); margin-bottom:.4rem; }
+    .av-sec p  { font-size:.83rem; color:var(--text-sec); margin-bottom:1.3rem; }
+    .av-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:.9rem; max-width:420px; margin:0 auto 1.8rem; }
+    .av-opt { aspect-ratio:1; border-radius:50%; border:2px solid var(--border); cursor:none; display:flex; align-items:center; justify-content:center; font-size:1.9rem; background:rgba(0,180,255,.04); transition:all .28s ease; }
+    .av-opt:hover,.av-opt.sel { border-color:var(--neon); box-shadow:0 0 20px var(--neon-glow); transform:scale(1.08); }
+    .av-opt.sel { background:rgba(0,180,255,.09); }
+
+    @media(max-width:600px) {
+      .cards-grid { grid-template-columns:1fr; }
+      .cube-wp { width:190px; height:190px; }
+      .cf { width:190px; height:190px; }
+      .cf.fr{transform:rotateY(0deg)   translateZ(95px)} .cf.bk{transform:rotateY(180deg) translateZ(95px)}
+      .cf.lf{transform:rotateY(-90deg) translateZ(95px)} .cf.rt{transform:rotateY(90deg)  translateZ(95px)}
+      .cf.tp{transform:rotateX(90deg)  translateZ(95px)} .cf.bt{transform:rotateX(-90deg) translateZ(95px)}
+    }
+  </style>
+</head>
+<body>
+<div id="app">
+
+  <!-- CUSTOM CURSOR -->
+  <div id="cur-dot"></div>
+  <div id="cur-ring"></div>
+
+  <!-- BURST CANVAS -->
+  <canvas id="burst-canvas"></canvas>
+
+  <!-- LOADING -->
+  <div id="loading">
+    <div class="ld-logo">VOYAGER</div>
+    <div class="ld-sub">Preparing your journey...</div>
+    <div class="ld-bar-wrap"><div class="ld-bar"></div></div>
+  </div>
+
+  <div id="toasts"></div>
+  <div id="nav"></div>
+  <button id="back" aria-label="Go back">&#8592;</button>
+  <div id="gav"><div class="bub">🧑‍✈️</div></div>
+  <div id="step"></div>
+
+  <!-- S1 GLOBE -->
+  <section id="s-globe" class="sec">
+    <div class="gh"><h1>VOYAGER</h1><p>Your immersive travel companion</p></div>
+    <canvas id="globe-c"></canvas>
+    <div id="pins" style="position:absolute;inset:0;pointer-events:none;z-index:5"></div>
+    <div class="ghint"><p>↑ Click a destination to begin</p></div>
+  </section>
+
+  <!-- S2 INTENT -->
+  <section id="s-intent" class="sec">
+    <div class="particles" id="ptcls"></div>
+    <div class="int-wrap">
+      <div class="int-badge"><span id="ib-flag">🌍</span><span id="ib-name">Destination</span></div>
+      <div class="int-q" id="int-q"></div>
+      <p class="int-sub" id="int-sub">Your adventure awaits.</p>
+      <button class="cta" id="btn-start">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+        Start Journey
+      </button>
+    </div>
+  </section>
+
+  <!-- S3 VEHICLE -->
+  <section id="s-vehicle" class="sec">
+    <div class="vscene">
+      <div class="vsky"><div class="vstars"></div></div>
+      <div class="vroad">
+        <div class="vre l"></div>
+        <div class="vrl"></div><div class="vrl"></div><div class="vrl"></div><div class="vrl"></div><div class="vrl"></div>
+        <div class="vre r"></div>
+      </div>
+      <div id="spd-lines" style="position:absolute;inset:0;overflow:hidden;pointer-events:none"></div>
+      <div class="vcar" id="vcar"></div>
+      <div class="vstatus"><h2 id="veh-lbl">On the Road</h2><p id="veh-dst">Heading to your destination...</p></div>
+    </div>
+  </section>
+
+  <!-- S4 DURATION -->
+  <section id="s-dur" class="sec">
+    <div class="particles" id="dur-ptcls"></div>
+    <div class="dur-wrap">
+      <div class="glow-ln"></div>
+      <div class="dur-q" id="dur-q">How many days are you planning to travel?</div>
+      <div class="dur-ig">
+        <input type="number" id="days-in" class="dur-in" min="1" max="30" value="3" />
+        <span class="dur-lbl">days</span>
+      </div>
+      <div class="dur-pre">
+        <button class="pre-btn" data-d="2">Weekend</button>
+        <button class="pre-btn" data-d="7">1 Week</button>
+        <button class="pre-btn" data-d="14">2 Weeks</button>
+        <button class="pre-btn" data-d="30">Month</button>
+      </div>
+      <button class="cta noanim" id="btn-dur">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="17" height="17"><path d="M8 6l4-4 4 4M12 2v13M20 17l-8 5-8-5"/></svg>
+        Plan My Trip
+      </button>
+    </div>
+  </section>
+
+  <!-- S5 TIMELINE -->
+  <section id="s-tl" class="sec">
+    <div class="tl-hd">
+      <div class="glow-ln"></div>
+      <h2>Your <span id="tl-dest">Journey</span> Plan</h2>
+      <p>A day-by-day curated itinerary just for you</p>
+    </div>
+    <div class="tl-wrap">
+      <div class="tl-line"></div>
+      <div id="tl-items"></div>
+    </div>
+    <div class="tl-cta">
+      <button class="cta noanim" id="btn-tl" style="margin-bottom:2.5rem">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="17" height="17"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+        Begin Journey
+      </button>
+    </div>
+  </section>
+
+  <!-- S6 JOURNEY -->
+  <section id="s-jrn" class="sec">
+    <div class="jscene">
+      <div class="jbg"></div>
+      <div class="jroad"></div>
+      <div class="jprog"><h2>Journey in Progress...</h2><div class="jpb"><div class="jpbf"></div></div></div>
+      <div class="jv" id="jv"></div>
+      <div class="jdest"><div class="jdball" id="jd-em">🏙️</div><div class="jdname" id="jd-nm">Destination</div></div>
+    </div>
+  </section>
+
+  <!-- S7 CUBE -->
+  <section id="s-cube" class="sec">
+    <div class="cube-hd">
+      <div class="glow-ln"></div>
+      <h2 id="cube-title">Discover the Destination</h2>
+      <p>Drag to spin · Explore iconic experiences</p>
+    </div>
+    <div class="cube-wp" id="cube-wp">
+      <div class="cube3 auto" id="cube3">
+        <div class="cf fr"></div><div class="cf bk"></div>
+        <div class="cf lf"></div><div class="cf rt"></div>
+        <div class="cf tp"></div><div class="cf bt"></div>
+      </div>
+    </div>
+    <div class="cube-ctrl">
+      <button class="cbtn" id="cpause" title="Pause/Resume">⏸</button>
+    </div>
+    <div class="cube-hint">Drag to rotate freely</div>
+    <button class="cta noanim" id="btn-cube" style="margin-bottom:2.5rem">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="17" height="17"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+      Explore More
+    </button>
+  </section>
+
+  <!-- S8 CARDS -->
+  <section id="s-cards" class="sec">
+    <div class="cards-hd">
+      <div class="glow-ln"></div>
+      <h2>Everything You Need to Know</h2>
+      <p>Hover cards for insider tips · 3D tilt interaction</p>
+    </div>
+    <div class="cards-grid" id="cards-grid"></div>
+    <div class="av-sec">
+      <h3>Choose Your Traveler Avatar</h3>
+      <p>Personalize your journey experience</p>
+      <div class="av-grid" id="av-grid"></div>
+    </div>
+    <div style="text-align:center;margin-bottom:3rem">
+      <button class="cta noanim" id="btn-restart">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="17" height="17"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+        Explore Another Destination
+      </button>
+    </div>
+  </section>
+</div>
+
+<video id="webcam" style="display:none;"></video>
+
+<script>
+// ══════════════════════════════════════════════════════════════════
+// DATA
+// ══════════════════════════════════════════════════════════════════
+const DEST = {
+  india:{name:"India",flag:"🇮🇳",emoji:"🕌",vehicle:"auto",color:"#ff8c00",
+    desc:"Land of vibrant culture, ancient temples and incredible diversity",
+    plan:[
+      {icon:"✈️",loc:"Mumbai Arrival",act:"Land at Chhatrapati Shivaji Airport, check into Bandra hotel. Evening stroll along Marine Drive.",tags:["arrival","city"]},
+      {icon:"🕌",loc:"Old Delhi",act:"Red Fort & Jama Masjid. Rickshaw ride through Chandni Chowk spice markets.",tags:["heritage","food"]},
+      {icon:"🏰",loc:"Agra — Taj Mahal",act:"Witness the Taj Mahal at sunrise. Visit Agra Fort. Return by evening train.",tags:["wonder","history"]}
+    ],
+    cube:[
+      {em:"🍛",tt:"Butter Chicken",ds:"Creamy tomato curry — a national favourite",mu:"Food"},
+      {em:"🕌",tt:"Taj Mahal",ds:"One of the Seven Wonders of the World",mu:"Landmark"},
+      {em:"🎭",tt:"Bollywood",ds:"The world's largest film industry",mu:"Culture"},
+      {em:"🧘",tt:"Yoga & Meditation",ds:"Birthplace of yoga — Rishikesh hub",mu:"Wellness"},
+      {em:"🎪",tt:"Holi Festival",ds:"Festival of colours with music & joy",mu:"Festival"},
+      {em:"🐘",tt:"Wildlife Reserves",ds:"Tigers, elephants and rich biodiversity",mu:"Nature"}
+    ],
+    cards:[
+      {icon:"🍜",type:"Food & Cuisine",title:"Flavors of India",prev:"A spice lover's paradise with regional diversity from every state.",det:"From rich northern gravies to coconut Kerala dishes. Must-try: biryani, dosas, butter chicken, mango lassi.",tip:"Stick to vegetarian options initially to ease your stomach into the spice levels."},
+      {icon:"🎭",type:"Culture & Art",title:"Ancient Civilisation",prev:"5,000 years of history woven into temples, forts and living traditions.",det:"Classical dance, intricate henna, silk weaving in Varanasi, and the spirituality of the Ganges.",tip:"Remove shoes before entering temples and dress modestly at religious sites."},
+      {icon:"💰",type:"Budget Tips",title:"Affordable Travel",prev:"India is one of the most budget-friendly destinations in the world.",det:"Street food under $1. AC train travel cheap. Local guesthouses $15–30/night.",tip:"Budget $30–50/day for comfortable mid-range experience."}
+    ]},
+  france:{name:"France",flag:"🇫🇷",emoji:"🗼",vehicle:"taxi",color:"#0051a5",
+    desc:"The city of love, art, haute cuisine and timeless elegance",
+    plan:[
+      {icon:"✈️",loc:"Paris Arrival",act:"Charles de Gaulle airport. Boutique hotel in Le Marais. Evening Seine River walk.",tags:["arrival","romantic"]},
+      {icon:"🗼",loc:"Eiffel Tower & Louvre",act:"Morning at Eiffel Tower. Afternoon Louvre with Mona Lisa. Sunset at Sacré-Cœur.",tags:["icons","art"]},
+      {icon:"🍷",loc:"Versailles Day Trip",act:"Royal Palace and gardens. Farewell dinner with wine and crêpes.",tags:["royalty","food"]}
+    ],
+    cube:[
+      {em:"🥐",tt:"Croissants & Café",ds:"Morning pastry ritual at a boulangerie",mu:"Food"},
+      {em:"🗼",tt:"Eiffel Tower",ds:"Iconic 324 m iron lattice tower",mu:"Landmark"},
+      {em:"🎨",tt:"Louvre Museum",ds:"World's largest art museum — 35,000+ works",mu:"Art"},
+      {em:"🍷",tt:"French Wine",ds:"Bordeaux, Burgundy, Champagne — world class",mu:"Culture"},
+      {em:"👗",tt:"Paris Fashion",ds:"Global capital of haute couture & style",mu:"Fashion"},
+      {em:"🏰",tt:"Versailles",ds:"Lavish royal estate with baroque gardens",mu:"History"}
+    ],
+    cards:[
+      {icon:"🥖",type:"Food & Cuisine",title:"Haute Cuisine Capital",prev:"French gastronomy is UNESCO cultural heritage.",det:"Croissants, onion soup, duck confit and macarons. More Michelin stars than any city.",tip:"Always say 'bonjour' before asking — the French appreciate courtesy."},
+      {icon:"🎨",type:"Culture & Art",title:"Art & Architecture",prev:"Museums and cathedrals defining Western civilisation.",det:"Louvre, Musée d'Orsay, Centre Pompidou, Notre-Dame, Versailles — each alone is worth the trip.",tip:"Book Louvre tickets online. Lines without tickets can be 2+ hours."},
+      {icon:"💰",type:"Budget Tips",title:"Paris on a Budget",prev:"Smart travellers know the tricks.",det:"Many museums free on first Sunday. Picnics in parks €10. Metro day pass €22.80.",tip:"Eat lunchtime 'formule' menus — 3 courses for €12–15 at excellent restaurants."}
+    ]},
+  uk:{name:"United Kingdom",flag:"🇬🇧",emoji:"🎡",vehicle:"cab",color:"#cf142b",
+    desc:"Royal heritage, red buses, tea culture and world-class museums",
+    plan:[
+      {icon:"✈️",loc:"London Arrival",act:"Heathrow to central London via Tube. Check in near Hyde Park. Evening at Covent Garden.",tags:["arrival","city"]},
+      {icon:"🎡",loc:"Central London Icons",act:"Big Ben, Westminster Abbey, Buckingham Palace. Thames cruise to Tower Bridge.",tags:["icons","royalty"]},
+      {icon:"🏛️",loc:"British Museum & Notting Hill",act:"British Museum (free). Colourful Notting Hill afternoon. Farewell fish & chips.",tags:["museum","local"]}
+    ],
+    cube:[
+      {em:"🍵",tt:"Afternoon Tea",ds:"Traditional tea with scones, cream & jam",mu:"Culture"},
+      {em:"🎡",tt:"London Eye",ds:"135 m Ferris wheel overlooking the Thames",mu:"Landmark"},
+      {em:"🏛️",tt:"British Museum",ds:"World history from Ancient Egypt to today",mu:"Museum"},
+      {em:"🎭",tt:"West End Theatre",ds:"World-class performances in iconic theatres",mu:"Arts"},
+      {em:"🍺",tt:"Pub Culture",ds:"Historic pubs with ales, pies and stories",mu:"Local"},
+      {em:"👑",tt:"Buckingham Palace",ds:"Official residence of the British monarch",mu:"Royalty"}
+    ],
+    cards:[
+      {icon:"🍔",type:"Food & Cuisine",title:"Beyond Fish & Chips",prev:"London is one of the most diverse food cities on Earth.",det:"Fish & chips, Indian restaurants in Brick Lane, Borough Market for artisan foods.",tip:"M&S Food Halls offer gourmet ready meals at a fraction of restaurant prices."},
+      {icon:"🎭",type:"Culture & Art",title:"Cultural Powerhouse",prev:"Free world-class museums and living history everywhere.",det:"British Museum, Natural History Museum, V&A, National Gallery — all free. West End, Shoreditch street art.",tip:"Most major London museums are completely free. Budget money for experiences."},
+      {icon:"💰",type:"Budget Tips",title:"London on a Budget",prev:"Free attractions make London manageable.",det:"Oyster card for transport, free museums, Pret a Manger meals, Camden Market cheap food.",tip:"Walk between central attractions — London's heart is compact and beautiful on foot."}
+    ]},
+  china:{name:"China",flag:"🇨🇳",emoji:"🏯",vehicle:"suv",color:"#de2910",
+    desc:"Ancient dynasties, stunning landscapes and modern megacities side by side",
+    plan:[
+      {icon:"✈️",loc:"Beijing Arrival",act:"Fly into Beijing Capital. Check in near Wangfujing. Explore Forbidden City perimeter.",tags:["arrival","history"]},
+      {icon:"🏯",loc:"Great Wall & Tiananmen",act:"Early morning Great Wall at Mutianyu. Tiananmen Square & Forbidden City.",tags:["wonder","history"]},
+      {icon:"🐉",loc:"Temple of Heaven & Hutongs",act:"Temple of Heaven morning tai chi. Historic hutong alleys. Peking duck dinner.",tags:["culture","food"]}
+    ],
+    cube:[
+      {em:"🍜",tt:"Peking Duck",ds:"Crispy roasted duck — a Beijing imperial delicacy",mu:"Food"},
+      {em:"🏯",tt:"Great Wall",ds:"2,300 km of ancient fortification across mountains",mu:"Wonder"},
+      {em:"🐉",tt:"Dragon Culture",ds:"Silk, porcelain and 5,000 years of dynasty",mu:"Heritage"},
+      {em:"🏙️",tt:"Shanghai Skyline",ds:"Futuristic Pudong — the Manhattan of Asia",mu:"Modern"},
+      {em:"🎋",tt:"Giant Pandas",ds:"Chengdu Research Base",mu:"Wildlife"},
+      {em:"⛵",tt:"Li River Cruise",ds:"Karst mountains and bamboo groves of Guilin",mu:"Nature"}
+    ],
+    cards:[
+      {icon:"🥟",type:"Food & Cuisine",title:"Incredible Diversity",prev:"8 major culinary traditions — each region totally different.",det:"Sichuan hotpot, Cantonese dim sum, Peking duck, hand-pulled noodles. Night markets are a paradise.",tip:"Download a translation app for menus. Most local restaurants have picture menus."},
+      {icon:"🏯",type:"Culture & Art",title:"5,000 Years of History",prev:"Ancient dynasties and astonishing heritage sites.",det:"Terracotta Army, Forbidden City, Great Wall, Zhangjiajie Avatar mountains.",tip:"Book Terracotta Army tickets well in advance. Peak seasons see massive crowds."},
+      {icon:"💰",type:"Budget Tips",title:"Incredible Value",prev:"China offers exceptional value.",det:"High-speed trains under $50. Street dumplings $1. Budget hotels $30–50/night.",tip:"Download WeChat Pay — many places don't accept foreign cards but accept QR payments."}
+    ]},
+  usa:{name:"New York, USA",flag:"🇺🇸",emoji:"🗽",vehicle:"taxi",color:"#3c3b6e",
+    desc:"The city that never sleeps — energy, culture and iconic landmarks",
+    plan:[
+      {icon:"✈️",loc:"NYC Arrival",act:"JFK to Manhattan. Times Square orientation walk. Brooklyn Bridge at sunset.",tags:["arrival","iconic"]},
+      {icon:"🗽",loc:"Manhattan Icons",act:"Staten Island ferry for Statue of Liberty views. Central Park. MoMA afternoon.",tags:["landmarks","art"]},
+      {icon:"🎭",loc:"Brooklyn & Broadway",act:"DUMBO waterfront, Smorgasburg market. Evening Broadway show.",tags:["local","culture"]}
+    ],
+    cube:[
+      {em:"🍕",tt:"NYC Pizza",ds:"Authentic NY-style thin crust by the slice",mu:"Food"},
+      {em:"🗽",tt:"Statue of Liberty",ds:"Symbol of freedom, gifted by France in 1886",mu:"Landmark"},
+      {em:"🎭",tt:"Broadway Shows",ds:"Pinnacle of live theatre and musical performance",mu:"Entertainment"},
+      {em:"🏙️",tt:"Manhattan Skyline",ds:"Empire State & One WTC — most iconic skyline",mu:"Architecture"},
+      {em:"🎨",tt:"MoMA & The Met",ds:"World-class art spanning all of art history",mu:"Museums"},
+      {em:"🌳",tt:"Central Park",ds:"843 acres of green space in the city heart",mu:"Nature"}
+    ],
+    cards:[
+      {icon:"🌮",type:"Food & Cuisine",title:"World in One City",prev:"Every cuisine from every nation, with NYC classics.",det:"Bagels with lox, NY pizza by the slice, Halal cart chicken, pastrami at Katz's, Chinatown dim sum.",tip:"Food halls like Chelsea Market and Smorgasburg let you sample cuisines affordably."},
+      {icon:"🎨",type:"Culture & Art",title:"Global Cultural Capital",prev:"More museums, galleries and theatres than anywhere.",det:"MoMA, the Met, Guggenheim, Whitney. Off-Broadway half price. Jazz in Harlem.",tip:"The Met has a 'pay what you wish' policy — be as generous as you can."},
+      {icon:"💰",type:"Budget Tips",title:"The Expensive Dream",prev:"Savvy travellers know how to stretch every dollar.",det:"7-day MetroCard $34. Free museums some evenings. Pizza by the slice $3–4.",tip:"Stay in Brooklyn or Queens to save 40–60% versus Manhattan hotels."}
+    ]},
+  dubai:{name:"Dubai, UAE",flag:"🇦🇪",emoji:"🏙️",vehicle:"suv",color:"#008000",
+    desc:"Ultra-modern luxury meets ancient Arabian tradition",
+    plan:[
+      {icon:"✈️",loc:"Dubai Arrival",act:"Dubai International to Downtown hotel. Burj Khalifa observation deck at sunset.",tags:["arrival","luxury"]},
+      {icon:"🏙️",loc:"Modern Dubai",act:"Dubai Mall & aquarium. Desert safari with camel ride, sandboarding and BBQ.",tags:["luxury","adventure"]},
+      {icon:"⛵",loc:"Old Dubai & Creek",act:"Gold Souk, Spice Souk. Abra boat across the Creek. Al Fahidi historic district.",tags:["heritage","culture"]}
+    ],
+    cube:[
+      {em:"🍢",tt:"Shawarma & Mezze",ds:"Street-side shawarma and Lebanese platters",mu:"Food"},
+      {em:"🏗️",tt:"Burj Khalifa",ds:"World's tallest building — 828 m with observation deck",mu:"Landmark"},
+      {em:"🐪",tt:"Desert Safari",ds:"Dune bashing, camels and Bedouin camp dinners",mu:"Adventure"},
+      {em:"💎",tt:"Gold Souk",ds:"World's largest gold market — 380+ retailers",mu:"Shopping"},
+      {em:"🌊",tt:"Palm Jumeirah",ds:"Artificial palm island with luxury resorts",mu:"Architecture"},
+      {em:"🕌",tt:"Sheikh Zayed Mosque",ds:"One of the world's largest & most beautiful mosques",mu:"Heritage"}
+    ],
+    cards:[
+      {icon:"🥘",type:"Food & Cuisine",title:"Arabian Flavours",prev:"Middle Eastern, South Asian and international food.",det:"Emirati harees and machboos, Arabic meze, Lebanese grills. Friday brunches legendary.",tip:"Al Dhiyafah Road (Satwa) has authentic street food under $5."},
+      {icon:"🕌",type:"Culture & Art",title:"Desert Heritage",prev:"Ancient Bedouin traditions meeting futuristic architecture.",det:"Al Fahidi Historic District, Dubai Museum, traditional abra rides, Bastakiya.",tip:"Dress modestly in souks and mosques. Swimwear only for beaches and pools."},
+      {icon:"💰",type:"Budget Tips",title:"Luxury for Less",prev:"Dubai has luxury extremes, but budget options exist.",det:"Metro and bus system is clean and affordable. Budget hotels in Deira.",tip:"Visit Jan–March for best weather. February Dubai Shopping Festival for incredible deals."}
+    ]}
+};
+
+function carSVG(type, color) {
+  const c = color||'#0080c8';
+  if(type==='auto') return `<svg width="170" height="96" viewBox="0 0 170 96"><rect x="18" y="28" width="134" height="50" rx="12" fill="${c}" opacity=".9"/><rect x="28" y="14" width="96" height="34" rx="8" fill="${c}"/><rect x="38" y="18" width="33" height="24" rx="4" fill="rgba(100,200,255,.28)" stroke="rgba(100,200,255,.45)" stroke-width="1"/><rect x="86" y="18" width="33" height="24" rx="4" fill="rgba(100,200,255,.28)" stroke="rgba(100,200,255,.45)" stroke-width="1"/><circle cx="46" cy="80" r="16" fill="#111" stroke="#333" stroke-width="2"/><circle cx="46" cy="80" r="8" fill="#222"/><circle cx="124" cy="80" r="16" fill="#111" stroke="#333" stroke-width="2"/><circle cx="124" cy="80" r="8" fill="#222"/><rect x="12" y="52" width="8" height="5" rx="1" fill="#ffe000"/><rect x="150" y="52" width="8" height="5" rx="1" fill="#f33"/><text x="85" y="55" font-size="10" fill="rgba(255,255,255,.75)" text-anchor="middle" font-family="sans-serif">AUTO</text></svg>`;
+  if(type==='cab') return `<svg width="195" height="104" viewBox="0 0 195 104"><rect x="8" y="38" width="178" height="52" rx="10" fill="#1a1a1a"/><rect x="22" y="16" width="136" height="42" rx="8" fill="#222"/><rect x="32" y="21" width="44" height="30" rx="4" fill="rgba(100,200,255,.22)" stroke="rgba(100,200,255,.38)" stroke-width="1"/><rect x="96" y="21" width="44" height="30" rx="4" fill="rgba(100,200,255,.22)" stroke="rgba(100,200,255,.38)" stroke-width="1"/><circle cx="44" cy="93" r="14" fill="#111" stroke="#333" stroke-width="2"/><circle cx="44" cy="93" r="7" fill="#222"/><circle cx="150" cy="93" r="14" fill="#111" stroke="#333" stroke-width="2"/><circle cx="150" cy="93" r="7" fill="#222"/><rect x="4" y="60" width="10" height="6" rx="2" fill="#ffe000"/><rect x="181" y="60" width="10" height="6" rx="2" fill="#f33"/><rect x="77" y="8" width="40" height="10" rx="5" fill="#f7b500"/><text x="97" y="17" font-size="7" fill="#000" text-anchor="middle" font-weight="bold" font-family="sans-serif">TAXI</text></svg>`;
+  if(type==='suv') return `<svg width="215" height="110" viewBox="0 0 215 110"><rect x="8" y="43" width="198" height="52" rx="12" fill="#0d1f35"/><rect x="18" y="16" width="158" height="47" rx="10" fill="#122035"/><rect x="28" y="22" width="54" height="33" rx="5" fill="rgba(100,200,255,.18)" stroke="rgba(100,200,255,.32)" stroke-width="1"/><rect x="102" y="22" width="54" height="33" rx="5" fill="rgba(100,200,255,.18)" stroke="rgba(100,200,255,.32)" stroke-width="1"/><circle cx="52" cy="99" r="15" fill="#111" stroke="#333" stroke-width="2"/><circle cx="52" cy="99" r="7" fill="#222"/><circle cx="162" cy="99" r="15" fill="#111" stroke="#333" stroke-width="2"/><circle cx="162" cy="99" r="7" fill="#222"/><rect x="4" y="66" width="12" height="7" rx="2" fill="#fffde0"/><rect x="199" y="66" width="12" height="7" rx="2" fill="#f33"/><text x="107" y="74" font-size="9" fill="rgba(0,180,255,.65)" text-anchor="middle" font-family="sans-serif">LUXURY SUV</text></svg>`;
+  return `<svg width="195" height="100" viewBox="0 0 195 100"><rect x="8" y="36" width="178" height="50" rx="10" fill="#f0c020"/><rect x="20" y="14" width="138" height="42" rx="8" fill="#d4a800"/><rect x="30" y="20" width="44" height="29" rx="4" fill="rgba(100,200,255,.28)" stroke="rgba(100,200,255,.48)" stroke-width="1"/><rect x="98" y="20" width="44" height="29" rx="4" fill="rgba(100,200,255,.28)" stroke="rgba(100,200,255,.48)" stroke-width="1"/><circle cx="46" cy="90" r="14" fill="#111" stroke="#333" stroke-width="2"/><circle cx="46" cy="90" r="7" fill="#222"/><circle cx="150" cy="90" r="14" fill="#111" stroke="#333" stroke-width="2"/><circle cx="150" cy="90" r="7" fill="#222"/><rect x="4" y="55" width="9" height="5" rx="1" fill="#ffe000"/><rect x="182" y="55" width="9" height="5" rx="1" fill="#f33"/><rect x="73" y="6" width="50" height="11" rx="6" fill="#111"/><text x="98" y="16" font-size="8" fill="#f0c020" text-anchor="middle" font-weight="bold" font-family="sans-serif">NYC TAXI</text></svg>`;
+}
+
+// ══════════════════════════════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════════════════════════════
+const S = { cur:'loading', dest:null, days:3, avatar:localStorage.getItem('voy-av')||null, hist:[] };
+const SECS = ['s-globe','s-intent','s-vehicle','s-dur','s-tl','s-jrn','s-cube','s-cards'];
+const STEP_LBL = {'s-globe':'Choose Destination','s-intent':'Travel Intent','s-vehicle':'Your Ride','s-dur':'Trip Duration','s-tl':'Travel Plan','s-jrn':'Journey Begins','s-cube':'Discover','s-cards':'Explore'};
+
+// ══════════════════════════════════════════════════════════════════
+// UTILS
+// ══════════════════════════════════════════════════════════════════
+function toast(msg,dur=3000){
+  const el=document.createElement('div'); el.className='toast'; el.textContent=msg;
+  document.getElementById('toasts').appendChild(el);
+  setTimeout(()=>{el.classList.add('out'); setTimeout(()=>el.remove(),300);},dur);
+}
+function go(id,push=true){
+  document.querySelectorAll('.sec').forEach(s=>s.classList.remove('on'));
+  const t=document.getElementById(id); if(t) t.classList.add('on');
+  if(push&&S.cur!==id&&S.cur!=='loading') S.hist.push(S.cur);
+  S.cur=id;
+  updateNav(); updateGav(); updateBack(); updateStep();
+}
+function updateNav(){ const n=document.getElementById('nav'); n.style.display=S.cur==='loading'?'none':'flex'; n.querySelectorAll('.nd').forEach((d,i)=>d.classList.toggle('on',SECS[i]===S.cur)); }
+function updateGav(){ const g=document.getElementById('gav'); const show=S.avatar&&S.cur!=='s-globe'&&S.cur!=='loading'; g.style.display=show?'block':'none'; if(S.avatar) g.querySelector('.bub').textContent=S.avatar; }
+function updateBack(){ const b=document.getElementById('back'); b.style.display=(S.hist.length>0&&S.cur!=='s-globe')?'flex':'none'; }
+function updateStep(){ const el=document.getElementById('step'); const lbl=STEP_LBL[S.cur]; el.textContent=lbl||''; el.style.display=lbl?'block':'none'; }
+
+// ══════════════════════════════════════════════════════════════════
+// ── HYPE DECAY #1: MAGNETIC SPRING CURSOR ──────────────────────
+// ══════════════════════════════════════════════════════════════════
+function initCursor(){
+  const dot  = document.getElementById('cur-dot');
+  const ring = document.getElementById('cur-ring');
+  let mx=window.innerWidth/2, my=window.innerHeight/2;
+  let rx=mx, ry=my;
+
+  document.addEventListener('mousemove', e => {
+    mx = e.clientX; my = e.clientY;
+    dot.style.left = mx+'px'; dot.style.top = my+'px';
+  });
+
+  // hover state: neon expand on interactive elements
+  document.addEventListener('mouseover', e => {
+    if(e.target.matches('button,a,.country-label,.nd,.av-opt,.pre-btn,.icard,.cbtn')) {
+      document.body.classList.add('cur-hover');
+    }
+  });
+  document.addEventListener('mouseout', e => {
+    if(e.target.matches('button,a,.country-label,.nd,.av-opt,.pre-btn,.icard,.cbtn')) {
+      document.body.classList.remove('cur-hover');
+    }
+  });
+
+  // click state: shrink snap
+  document.addEventListener('mousedown', () => document.body.classList.add('cur-click'));
+  document.addEventListener('mouseup',   () => document.body.classList.remove('cur-click'));
+
+  (function loop(){
+    // Spring physics — same lag/ease as Hype Decay site
+    rx += (mx - rx) * 0.10;
+    ry += (my - ry) * 0.10;
+    ring.style.left = rx+'px';
+    ring.style.top  = ry+'px';
+    requestAnimationFrame(loop);
+  })();
+}
+
+// ══════════════════════════════════════════════════════════════════
+// ── HYPE DECAY #2: CLICK PARTICLE BURST ───────────────────────
+// ══════════════════════════════════════════════════════════════════
+const BC = document.getElementById('burst-canvas');
+const BX = BC.getContext('2d');
+let particles_burst = [];
+
+function resizeBurst(){
+  BC.width  = window.innerWidth;
+  BC.height = window.innerHeight;
+}
+resizeBurst();
+window.addEventListener('resize', resizeBurst);
+
+function fireBurst(x, y, primary='#00b4ff'){
+  const palette = [primary,'#ffffff','rgba(0,180,255,.55)','#7fd7ff','rgba(255,255,255,.7)'];
+  const count = 55;
+  for(let i=0;i<count;i++){
+    const angle   = (Math.PI*2/count)*i + (Math.random()-.5)*.6;
+    const speed   = 3.5 + Math.random()*8.5;
+    const size    = 1.5 + Math.random()*4;
+    const gravity = 0.12 + Math.random()*.18;
+    const life    = 0.9 + Math.random()*.6;
+    particles_burst.push({
+      x, y,
+      vx: Math.cos(angle)*speed,
+      vy: Math.sin(angle)*speed,
+      size, gravity, life, maxLife:life,
+      color: palette[Math.floor(Math.random()*palette.length)],
+      // some particles are "streaks"
+      streak: Math.random() < .35,
+      px:x, py:y
+    });
+  }
+  // inner bright flash ring
+  particles_burst.push({ring:true, x, y, r:4, maxR:80, life:.6, maxLife:.6, color:primary});
+  // second ring slightly delayed
+  setTimeout(() => {
+    particles_burst.push({ring:true, x, y, r:4, maxR:50, life:.45, maxLife:.45, color:'rgba(255,255,255,.5)'});
+  }, 60);
+}
+
+function animBurst(){
+  BX.clearRect(0,0,BC.width,BC.height);
+  particles_burst = particles_burst.filter(p => p.life > 0);
+  for(const p of particles_burst){
+    const alpha = p.life / p.maxLife;
+    if(p.ring){
+      const r = p.maxR * (1 - alpha) + p.r;
+      BX.beginPath();
+      BX.arc(p.x, p.y, r, 0, Math.PI*2);
+      BX.strokeStyle = p.color.startsWith('rgba') ? p.color.replace(/[\d.]+\)$/, alpha*.7+')') : p.color;
+      BX.lineWidth = 1.5*(alpha);
+      BX.globalAlpha = alpha*.6;
+      BX.stroke();
+      BX.globalAlpha = 1;
+      p.life -= .028;
+    } else {
+      p.px = p.x; p.py = p.y;
+      p.vy += p.gravity;
+      p.x  += p.vx;
+      p.y  += p.vy;
+      p.vx *= 0.97;
+      BX.globalAlpha = Math.min(1, alpha * 1.4);
+      BX.fillStyle = p.color;
+      if(p.streak){
+        BX.beginPath();
+        BX.moveTo(p.px, p.py);
+        BX.lineTo(p.x, p.y);
+        BX.lineWidth = p.size*.6;
+        BX.strokeStyle = p.color;
+        BX.stroke();
+      } else {
+        BX.beginPath();
+        BX.arc(p.x, p.y, p.size*(alpha*.5+.5), 0, Math.PI*2);
+        BX.fill();
+      }
+      BX.globalAlpha = 1;
+      p.size *= 0.985;
+      p.life -= .018 + Math.random()*.009;
+    }
+  }
+  requestAnimationFrame(animBurst);
+}
+animBurst();
+
+// ══════════════════════════════════════════════════════════════════
+// ── HYPE DECAY #3: 3D CARD TILT (bento-style) ─────────────────
+// ══════════════════════════════════════════════════════════════════
+function initCardTilt(){
+  document.addEventListener('mousemove', e => {
+    document.querySelectorAll('.icard').forEach(card => {
+      const r = card.getBoundingClientRect();
+      if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom){
+        card.style.transform='perspective(900px) rotateX(0deg) rotateY(0deg) scale(1)';
+        return;
+      }
+      const cx = (e.clientX - r.left) / r.width  - .5;  // -0.5 to 0.5
+      const cy = (e.clientY - r.top)  / r.height - .5;
+      const tiltX = -(cy * 16);  // max ±8 deg
+      const tiltY =  (cx * 16);
+      card.style.transform=`perspective(900px) rotateX(${tiltX}deg) rotateY(${tiltY}deg) scale(1.03)`;
+    });
+  });
+  document.addEventListener('mouseleave', () => {
+    document.querySelectorAll('.icard').forEach(card => {
+      card.style.transform='perspective(900px) rotateX(0deg) rotateY(0deg) scale(1)';
+    });
+  });
+}
+
+// ══════════════════════════════════════════════════════════════════
+// ── HYPE DECAY #4: DRAGGABLE 3D CUBE (tesseract-style inertia) ─
+// ══════════════════════════════════════════════════════════════════
+function initCubeDrag(){
+  const wp   = document.getElementById('cube-wp');
+  const cube = document.getElementById('cube3');
+  let rotX=-15, rotY=0;
+  let velX=0, velY=0;
+  let dragging=false, lastX=0, lastY=0, moved=0;
+  let autoAnim=true, autoRaf=null;
+
+  function setTransform(){ cube.style.transform=`rotateX(${rotX}deg) rotateY(${rotY}deg)`; }
+
+  function startAuto(){
+    if(!autoAnim) return;
+    cube.classList.add('auto');
+  }
+  function stopAuto(){
+    cube.classList.remove('auto');
+    // capture current computed rotation from auto animation and apply as inline
+    const mat = getComputedStyle(cube).transform;
+    if(mat&&mat!=='none'){
+      cube.style.transform = mat;
+      const vals = mat.match(/matrix3d\((.+)\)/) || mat.match(/matrix\((.+)\)/);
+      if(!vals){
+        // fallback: reset
+        rotX=-15; rotY=0;
+      }
+    }
+  }
+
+  wp.addEventListener('pointerdown', e => {
+    dragging=true; moved=0;
+    lastX=e.clientX; lastY=e.clientY;
+    velX=0; velY=0;
+    stopAuto();
+    wp.setPointerCapture(e.pointerId);
+    cube.classList.add('auto');
+    cube.classList.remove('auto');
+    // snapshot actual rotations
+    rotX=-15; rotY=parseFloat(cube.style.getPropertyValue('--ry'))||0;
+    setTransform();
+  });
+
+  window.addEventListener('pointermove', e => {
+    if(!dragging) return;
+    const dx = e.clientX - lastX;
+    const dy = e.clientY - lastY;
+    moved += Math.abs(dx)+Math.abs(dy);
+    velX = dy * .55;
+    velY = dx * .55;
+    rotX -= dy*.42;
+    rotY += dx*.42;
+    rotX = Math.max(-60, Math.min(60, rotX));
+    lastX=e.clientX; lastY=e.clientY;
+    setTransform();
+  });
+
+  window.addEventListener('pointerup', () => {
+    if(!dragging) return;
+    dragging=false;
+    // inertia loop
+    (function inertia(){
+      if(Math.abs(velX)<.05&&Math.abs(velY)<.05){
+        // restart auto if paused wasn't clicked
+        if(autoAnim){ setTimeout(startAuto,1800); }
+        return;
+      }
+      rotX -= velX*.6;
+      rotY += velY*.6;
+      rotX = Math.max(-60,Math.min(60,rotX));
+      velX *= .88;
+      velY *= .88;
+      setTransform();
+      requestAnimationFrame(inertia);
+    })();
+  });
+
+  // pause button
+  const pbtn = document.getElementById('cpause');
+  pbtn.onclick = () => {
+    autoAnim = !autoAnim;
+    if(autoAnim){ startAuto(); pbtn.textContent='⏸'; }
+    else { stopAuto(); rotX=-15; rotY=0; setTransform(); pbtn.textContent='▶'; }
+  };
+}
+
+// ══════════════════════════════════════════════════════════════════
+// NAV DOTS
+// ══════════════════════════════════════════════════════════════════
+function buildNav(){
+  const nav=document.getElementById('nav');
+  SECS.forEach((id,i)=>{
+    const d=document.createElement('div'); d.className='nd';
+    d.addEventListener('click',()=>{ if(SECS[i]!==S.cur) go(SECS[i]); });
+    nav.appendChild(d);
+  });
+  nav.style.display='none';
+}
+
+function particles(id){
+  const c=document.getElementById(id); if(!c) return;
+  for(let i=0;i<28;i++){
+    const p=document.createElement('div'); p.className='par';
+    const sz=1+Math.random()*2.5, drift=(Math.random()-.5)*200;
+    p.style.cssText=`left:${Math.random()*100}%;width:${sz}px;height:${sz}px;background:rgba(0,180,255,0.7);animation-duration:${4+Math.random()*8}s;animation-delay:${-Math.random()*8}s;--d:${drift}px`;
+    c.appendChild(p);
+  }
+}
+
+function speedLines(){
+  const c=document.getElementById('spd-lines'); if(!c) return;
+  for(let i=0;i<18;i++){
+    const l=document.createElement('div'); l.className='spd-line';
+    l.style.cssText=`top:${Math.random()*100}%;width:${100+Math.random()*180}px;animation-duration:${.38+Math.random()*.55}s;animation-delay:${-Math.random()}s;opacity:${.18+Math.random()*.42}`;
+    c.appendChild(l);
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// GLOBE
+// ══════════════════════════════════════════════════════════════════
+const GEO={india:[20,77],france:[48.5,2.3],uk:[51.5,-0.1],china:[35,105],usa:[40.7,-74],dubai:[25.2,55.3]};
+const ARCS=[['india','dubai'],['dubai','france'],['france','uk'],['uk','usa'],['usa','china'],['china','india'],['india','usa'],['france','dubai']];
+let rotation=0, dotPos={};
+
+function initGlobe(){
+  const canvas=document.getElementById('globe-c');
+  const ctx=canvas.getContext('2d');
+  function resize(){ canvas.width=canvas.offsetWidth; canvas.height=canvas.offsetHeight; }
+  resize(); window.addEventListener('resize',resize);
+
+  function ll2xy(lat,lon,rot){
+    const adj=lon+rot;
+    const x=Math.cos(lat*Math.PI/180)*Math.sin(adj*Math.PI/180);
+    const y=-Math.sin(lat*Math.PI/180);
+    const z=Math.cos(lat*Math.PI/180)*Math.cos(adj*Math.PI/180);
+    return{x,y,z};
+  }
+
+  function draw(){
+    const W=canvas.width, H=canvas.height;
+    const R=Math.min(W,H)*.34;
+    const cx=W/2, cy=H/2;
+    ctx.clearRect(0,0,W,H);
+
+    // outer glow
+    const og=ctx.createRadialGradient(cx,cy,R*.85,cx,cy,R*1.18);
+    og.addColorStop(0,'rgba(0,180,255,0)'); og.addColorStop(.5,'rgba(0,180,255,.055)'); og.addColorStop(1,'rgba(0,180,255,0)');
+    ctx.beginPath(); ctx.arc(cx,cy,R*1.18,0,Math.PI*2); ctx.fillStyle=og; ctx.fill();
+
+    // globe fill
+    const gf=ctx.createRadialGradient(cx-R*.3,cy-R*.3,0,cx,cy,R);
+    gf.addColorStop(0,'#0a2545'); gf.addColorStop(.5,'#061830'); gf.addColorStop(1,'#020b18');
+    ctx.beginPath(); ctx.arc(cx,cy,R,0,Math.PI*2); ctx.fillStyle=gf; ctx.fill();
+    ctx.beginPath(); ctx.arc(cx,cy,R,0,Math.PI*2); ctx.strokeStyle='rgba(0,180,255,.28)'; ctx.lineWidth=1.5; ctx.stroke();
+
+    // grid lines
+    function gLine(pts){ if(pts.length<2) return; ctx.beginPath(); ctx.moveTo(pts[0].x,pts[0].y); for(let i=1;i<pts.length;i++) ctx.lineTo(pts[i].x,pts[i].y); ctx.strokeStyle='rgba(0,60,120,.22)'; ctx.lineWidth=.5; ctx.stroke(); }
+    for(let lat=-60;lat<=60;lat+=30){ let pts=[]; for(let lon=-180;lon<=180;lon+=5){ const p=ll2xy(lat,lon,rotation); if(p.z>0) pts.push({x:cx+R*p.x,y:cy+R*p.y}); else if(pts.length){gLine(pts);pts=[];} } if(pts.length) gLine(pts); }
+    for(let lon=-180;lon<=180;lon+=30){ let pts=[]; for(let lat=-80;lat<=80;lat+=5){ const p=ll2xy(lat,lon,rotation); if(p.z>0) pts.push({x:cx+R*p.x,y:cy+R*p.y}); else if(pts.length){gLine(pts);pts=[];} } if(pts.length) gLine(pts); }
+
+    // animated arcs
+    ARCS.forEach(([fr,to],idx)=>{
+      const p1=ll2xy(GEO[fr][0],GEO[fr][1],rotation);
+      const p2=ll2xy(GEO[to][0],GEO[to][1],rotation);
+      if(p1.z>.1&&p2.z>.1){
+        const x1=cx+R*p1.x,y1=cy+R*p1.y,x2=cx+R*p2.x,y2=cy+R*p2.y;
+        const mx2=(x1+x2)/2,my2=(y1+y2)/2-38;
+        const t=((Date.now()/2000)+idx*.35)%1;
+        const px=(1-t)*(1-t)*x1+2*(1-t)*t*mx2+t*t*x2;
+        const py=(1-t)*(1-t)*y1+2*(1-t)*t*my2+t*t*y2;
+        const ag=ctx.createLinearGradient(x1,y1,x2,y2);
+        ag.addColorStop(0,'rgba(0,180,255,0)'); ag.addColorStop(.4,'rgba(0,180,255,.48)'); ag.addColorStop(.6,'rgba(0,180,255,.48)'); ag.addColorStop(1,'rgba(0,180,255,0)');
+        ctx.beginPath(); ctx.moveTo(x1,y1); ctx.quadraticCurveTo(mx2,my2,x2,y2);
+        ctx.strokeStyle=ag; ctx.lineWidth=1.1; ctx.stroke();
+        ctx.beginPath(); ctx.arc(px,py,3,0,Math.PI*2); ctx.fillStyle='#fff'; ctx.fill();
+        ctx.beginPath(); ctx.arc(px,py,6,0,Math.PI*2); ctx.fillStyle='rgba(0,180,255,.38)'; ctx.fill();
+      }
+    });
+
+    // destination dots
+    dotPos={};
+    Object.entries(GEO).forEach(([key,[lat,lon]])=>{
+      const p=ll2xy(lat,lon,rotation);
+      if(p.z>.08){
+        const x=cx+R*p.x, y=cy+R*p.y;
+        const pulse=Math.sin(Date.now()/720+lat)*.28+.72;
+        ctx.beginPath(); ctx.arc(x,y,5*pulse,0,Math.PI*2); ctx.fillStyle=`rgba(0,180,255,${.55*pulse})`; ctx.fill();
+        ctx.beginPath(); ctx.arc(x,y,3,0,Math.PI*2); ctx.fillStyle='#00b4ff'; ctx.fill();
+        dotPos[key]={cx:x,cy:y,z:p.z};
+      }
+    });
+
+    // sync label positions
+    Object.entries(dotPos).forEach(([key,{cx:lx,cy:ly}])=>{
+      const lbl=document.querySelector(`.country-label[data-k="${key}"]`);
+      if(lbl){ lbl.style.left=lx+'px'; lbl.style.top=ly+'px'; lbl.style.display='block'; }
+    });
+    Object.keys(GEO).forEach(key=>{
+      if(!dotPos[key]){ const lbl=document.querySelector(`.country-label[data-k="${key}"]`); if(lbl) lbl.style.display='none'; }
+    });
+
+    rotation+=.2;
+    requestAnimationFrame(draw);
+  }
+  draw();
+
+  // click on canvas — fires burst at click point
+  canvas.addEventListener('click', e=>{
+    const r=canvas.getBoundingClientRect();
+    const mx=e.clientX-r.left, my=e.clientY-r.top;
+    let best=null,bestD=28;
+    Object.entries(dotPos).forEach(([k,{cx,cy,z}])=>{
+      const d=Math.hypot(mx-cx,my-cy);
+      if(d<bestD&&z>.15){bestD=d;best=k;}
+    });
+    if(best){
+      const screenX=e.clientX, screenY=e.clientY;
+      // ── BURST at exact click position ──
+      const destColor = DEST[best].color;
+      fireBurst(screenX, screenY, destColor);
+      setTimeout(()=>fireBurst(screenX, screenY,'rgba(255,255,255,.8)'), 80);
+      pickDest(best, screenX, screenY);
+    }
+  });
+
+  // click on labels
+  document.querySelectorAll('.country-label').forEach(lbl=>{
+    lbl.addEventListener('click', e=>{
+      const k=lbl.dataset.k;
+      const r=lbl.getBoundingClientRect();
+      fireBurst(r.left+r.width/2, r.top+r.height/2, DEST[k].color);
+      pickDest(k);
+    });
+  });
+}
+
+function buildPins(){
+  const wrap=document.getElementById('pins');
+  Object.entries(GEO).forEach(([key])=>{
+    const lbl=document.createElement('div'); lbl.className='country-label'; lbl.dataset.k=key; lbl.style.display='none';
+    lbl.innerHTML=`<div class="dot"></div><div class="nm">${DEST[key].name}</div>`;
+    wrap.appendChild(lbl);
+  });
+}
+
+// ══════════════════════════════════════════════════════════════════
+// DESTINATION FLOW
+// ══════════════════════════════════════════════════════════════════
+function pickDest(key){
+  S.dest=key;
+  toast(`✈️ ${DEST[key].name} selected!`);
+  setTimeout(()=>showIntent(DEST[key]),320);
+}
+
+function showIntent(d){
+  go('s-intent');
+  document.getElementById('ib-flag').textContent=d.flag;
+  document.getElementById('ib-name').textContent=d.name;
+  document.getElementById('int-sub').textContent=d.desc+' — your adventure awaits.';
+  const q=document.getElementById('int-q');
+  const words=['Where','do','you','want','to','travel?'];
+  q.innerHTML=words.map((w,i)=>`<span class="wd${w==='travel?'?' hl':''}" style="transition-delay:${.3+i*.12}s">${w}</span>`).join('');
+  setTimeout(()=>q.querySelectorAll('.wd').forEach(w=>w.classList.add('v')),80);
+}
+
+function showVehicle(){
+  const d=DEST[S.dest];
+  go('s-vehicle');
+  document.getElementById('veh-lbl').textContent=d.vehicle==='cab'?'Black London Cab':d.vehicle==='auto'?'Auto Rickshaw':d.vehicle==='suv'?'Luxury SUV':'Yellow Taxi';
+  document.getElementById('veh-dst').textContent=`Heading to ${d.name}`;
+  document.getElementById('vcar').innerHTML=carSVG(d.vehicle,d.color);
+  setTimeout(()=>{toast('🛬 Arrived! Let\'s plan your trip.'); setTimeout(()=>go('s-dur'),500);},5000);
+}
+
+let durInited=false;
+function activateDuration(){
+  if(durInited) return; durInited=true;
+  typewriter('dur-q','How many days are you planning to travel?',38);
+}
+
+function typewriter(id,txt,delay=50){
+  const el=document.getElementById(id); if(!el) return; el.innerHTML='';
+  [...txt].forEach((ch,i)=>{
+    setTimeout(()=>{
+      const s=document.createElement('span');
+      s.className='ch'+(ch===' '?' sp':''); s.textContent=ch===' '?'\u00A0':ch;
+      el.appendChild(s);
+    },i*delay);
+  });
+}
+
+function showTimeline(){
+  const d=DEST[S.dest];
+  go('s-tl');
+  document.getElementById('tl-dest').textContent=`${d.flag} ${d.name}`;
+  const wrap=document.getElementById('tl-items'); wrap.innerHTML='';
+  const days=Math.min(S.days,14);
+  const ext=['🌅','🗺️','🏖️','🎭','🍽️','🚶','🎪','🌃','🎵','🏛️','🌿','🛍️','🧭','🌄'];
+  for(let i=0;i<days;i++){
+    const item=d.plan[i]||{icon:ext[i%ext.length],loc:`Day ${i+1} Adventure`,act:`Explore hidden gems and local markets. Rest, relax and absorb the culture of ${d.name}.`,tags:['explore','culture']};
+    const el=document.createElement('div'); el.className='tl-item';
+    el.innerHTML=`<div class="tl-dot">${item.icon}</div><div class="tl-body"><div class="day-tag">Day ${i+1}</div><h3>${item.loc}</h3><p>${item.act}</p><div class="tl-tags">${(item.tags||[]).map(t=>`<span class="tag">${t}</span>`).join('')}</div></div>`;
+    wrap.appendChild(el);
+  }
+  setTimeout(()=>{ wrap.querySelectorAll('.tl-item').forEach((el,i)=>setTimeout(()=>el.classList.add('v'),i*140)); },200);
+}
+
+function showJourney(){
+  const d=DEST[S.dest];
+  go('s-jrn');
+  document.getElementById('jd-em').textContent=d.emoji;
+  document.getElementById('jd-nm').textContent=d.name;
+  document.getElementById('jv').innerHTML=carSVG(d.vehicle,d.color);
+  setTimeout(()=>{ toast(`🎉 Welcome to ${d.name}!`); setTimeout(showCube,1400); },5500);
+}
+
+function showCube(){
+  const d=DEST[S.dest];
+  go('s-cube');
+  document.getElementById('cube-title').textContent=`Discover ${d.name}`;
+  const faces=['fr','bk','lf','rt','tp','bt'];
+  const cube=document.getElementById('cube3');
+  // restart auto rotation
+  cube.classList.remove('auto');
+  void cube.offsetWidth;
+  cube.classList.add('auto');
+  faces.forEach((cls,i)=>{
+    const face=cube.querySelector('.cf.'+cls);
+    const item=d.cube[i]||d.cube[i%d.cube.length];
+    face.innerHTML=`<div class="cf-mu">${item.mu}</div><div class="cf-em">${item.em}</div><div class="cf-tt">${item.tt}</div><div class="cf-ds">${item.ds}</div>`;
+  });
+}
+
+function showCards(){
+  const d=DEST[S.dest];
+  go('s-cards');
+  const grid=document.getElementById('cards-grid'); grid.innerHTML='';
+  d.cards.forEach(c=>{
+    const el=document.createElement('div'); el.className='icard';
+    el.innerHTML=`<div class="ic-icon">${c.icon}</div><div class="ic-type">${c.type}</div><h3>${c.title}</h3><p class="ic-prev">${c.prev}</p><div class="ic-exp"><p>${c.det}</p><div class="ic-tip">💡 ${c.tip}</div></div>`;
+    grid.appendChild(el);
+  });
+  buildAvatars();
+}
+
+function buildAvatars(){
+  const avs=['🧑‍✈️','👩‍🌾','🧑‍🎨','👩‍🚀','🧑‍💼','👩‍🏖️','🧑‍🍳','👩‍🎤'];
+  const grid=document.getElementById('av-grid'); grid.innerHTML='';
+  avs.forEach(av=>{
+    const b=document.createElement('button'); b.className='av-opt'+(S.avatar===av?' sel':''); b.textContent=av;
+    b.onclick=()=>{
+      document.querySelectorAll('.av-opt').forEach(x=>x.classList.remove('sel'));
+      b.classList.add('sel'); S.avatar=av;
+      localStorage.setItem('voy-av',av); updateGav();
+      toast(`Avatar updated to ${av}!`);
+      // fire a mini burst on avatar pick
+      const r=b.getBoundingClientRect();
+      fireBurst(r.left+r.width/2, r.top+r.height/2, '#00b4ff');
+    };
+    grid.appendChild(b);
+  });
+}
+
+// ══════════════════════════════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════════════════════════════
+function init(){
+  initCursor();
+  buildNav(); buildPins(); initGlobe();
+  particles('ptcls'); particles('dur-ptcls'); speedLines();
+  initCardTilt();
+  initCubeDrag();
+
+  setTimeout(()=>{
+    document.getElementById('loading').classList.add('gone');
+    go('s-globe',false);
+    toast('🌍 Click a destination to begin!');
+    updateGav();
+  },3000);
+
+  // observe duration section
+  const durSec=document.getElementById('s-dur');
+  new MutationObserver(()=>{ if(durSec.classList.contains('on')){ durInited=false; activateDuration(); } }).observe(durSec,{attributes:true,attributeFilter:['class']});
+
+  // preset buttons
+  document.querySelectorAll('.pre-btn').forEach(b=>{
+    b.addEventListener('click',()=>{ document.getElementById('days-in').value=b.dataset.d; S.days=+b.dataset.d; });
+  });
+
+  // cta buttons
+  document.getElementById('btn-start').onclick=()=>showVehicle();
+  document.getElementById('btn-dur').onclick=()=>{
+    const v=+document.getElementById('days-in').value;
+    if(!v||v<1){toast('⚠️ Enter at least 1 day');return;}
+    S.days=Math.min(v,14);
+    toast(`Planning a ${S.days}-day trip to ${DEST[S.dest]?.name}!`);
+    setTimeout(showTimeline,380);
+  };
+  document.getElementById('btn-tl').onclick=()=>showJourney();
+  document.getElementById('btn-cube').onclick=()=>showCards();
+  document.getElementById('btn-restart').onclick=()=>{
+    S.dest=null; S.hist=[];
+    go('s-globe',false);
+    toast('🌍 Choose another destination!');
+  };
+  document.getElementById('back').onclick=()=>{ const p=S.hist.pop(); if(p) go(p,false); };
+  if(S.avatar) updateGav();
+}
+
+document.addEventListener('DOMContentLoaded', init);
+</script>
+<script>
+// ══════════════════════════════════════════════════════════════════
+// GESTURE CONTROL WITH MEDIAPIPE
+// ══════════════════════════════════════════════════════════════════
+let hands, camera;
+let lastGestureTime = 0;
+const gestureCooldown = 1000;
+
+async function initGestures() {
+  try {
+    const videoElement = document.getElementById('webcam');
+    
+    hands = new Hands({
+      locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4/${file}`
+    });
+
+    hands.setOptions({
+      maxNumHands: 1,
+      modelComplexity: 1,
+      minDetectionConfidence: 0.7,
+      minTrackingConfidence: 0.5
+    });
+
+    hands.onResults(onResults);
+
+    camera = new Camera(videoElement, {
+      onFrame: async () => {
+        await hands.send({image: videoElement});
+      },
+      width: 640,
+      height: 480
+    });
+
+    await camera.initialize();
+    await camera.start();
+    toast('🎥 Camera ready! Thumbs up/down to navigate.');
+    console.log('✅ MediaPipe initialized');
+  } catch (err) {
+    console.error('❌ Error:', err);
+    toast('⚠️ Check browser console for errors');
+  }
+}
+
+function onResults(results) {
+  if (results.multiHandLandmarks?.[0]) {
+    const landmarks = results.multiHandLandmarks[0];
+    const handedness = results.multiHandedness?.[0];
+    const gesture = detectGesture(landmarks, handedness?.label);
+    
+    if (gesture && Date.now() - lastGestureTime > gestureCooldown) {
+      lastGestureTime = Date.now();
+      handleGesture(gesture);
+    }
+  }
+}
+
+function detectGesture(landmarks, handedness) {
+  const thumbTip = landmarks[4];
+  const thumbPip = landmarks[3];
+  const indexTip = landmarks[8];
+  const middleTip = landmarks[12];
+  
+  const otherFingersClosed = indexTip.y > thumbTip.y && middleTip.y > thumbTip.y;
+  
+  if (thumbTip.y < thumbPip.y - 0.1 && otherFingersClosed) {
+    return 'next';
+  } else if (thumbTip.y > thumbPip.y + 0.1 && otherFingersClosed) {
+    return 'prev';
+  }
+  return null;
+}
+
+function handleGesture(gesture) {
+  const currentIndex = SECS.indexOf(S.cur);
+  if (gesture === 'next' && currentIndex < SECS.length - 1) {
+    go(SECS[currentIndex + 1]);
+    toast('👍 Next!');
+  } else if (gesture === 'prev' && currentIndex > 0) {
+    go(SECS[currentIndex - 1]);
+    toast('👎 Back!');
+  }
+}
+
+window.addEventListener('load', () => {
+  setTimeout(() => {
+    if (typeof Hands !== 'undefined' && typeof Camera !== 'undefined') {
+      initGestures();
+    } else {
+      console.error('MediaPipe not loaded');
+    }
+  }, 500);
+});
+</script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4/hands.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.4/camera_utils.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils@0.3/drawing_utils.js"></script>
+<script src="https://replit-cdn.com/replit-pill/replit-pill.global.js" data-referral-code="ttr3ynfkk209" data-repl-id="c5df46d4-4675-4745-9883-a8d0aa3bf15b"></script></body>
+</html>
