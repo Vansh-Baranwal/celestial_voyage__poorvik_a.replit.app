@@ -1037,97 +1037,186 @@ function showTimeline(){
   const ext=['🌅','🗺️','🏖️','🎭','🍽️','🚶','🎪','🌃','🎵','🏛️','🌿','🛍️','🧭','🌄'];
   for(let i=0;i<days;i++){
     const item=d.plan[i]||{icon:ext[i%ext.length],loc:`Day ${i+1} Adventure`,act:`Explore hidden gems and local markets. Rest, relax and absorb the culture of ${d.name}.`,tags:['explore','culture']};
-    const el=document.createElement('div'); el.className='tl-item';
-    el.innerHTML=`<div class="tl-dot">${item.icon}</div><div class="tl-body"><div class="day-tag">Day ${i+1}</div><h3>${item.loc}</h3><p>${item.act}</p><div class="tl-tags">${(item.tags||[]).map(t=>`<span class="tag">${t}</span>`).join('')}</div></div>`;
-    wrap.appendChild(el);
-  }
-  setTimeout(()=>{ wrap.querySelectorAll('.tl-item').forEach((el,i)=>setTimeout(()=>el.classList.add('v'),i*140)); },200);
-}
+    const el=document.createElement('// ══════════════════════════════════════════════════════════════════
+// ENHANCED GESTURE CONTROL WITH MEDIAPIPE
+// ══════════════════════════════════════════════════════════════════
+let hands;
+let lastGestureTime = 0;
+const gestureCooldown = 800;
+let isGestureActive = false;
+let lastX = null;
+let lastY = null;
 
-function showJourney(){
-  const d=DEST[S.dest];
-  go('s-jrn');
-  document.getElementById('jd-em').textContent=d.emoji;
-  document.getElementById('jd-nm').textContent=d.name;
-  document.getElementById('jv').innerHTML=carSVG(d.vehicle,d.color);
-  setTimeout(()=>{ toast(`🎉 Welcome to ${d.name}!`); setTimeout(showCube,1400); },5500);
-}
+// Cursor state for smoothing
+let handCursorX = 0;
+let handCursorY = 0;
+let targetX = 0;
+let targetY = 0;
 
-function showCube(){
-  const d=DEST[S.dest];
-  go('s-cube');
-  document.getElementById('cube-title').textContent=`Discover ${d.name}`;
-  const faces=['fr','bk','lf','rt','tp','bt'];
-  const cube=document.getElementById('cube3');
-  // restart auto rotation
-  cube.classList.remove('auto');
-  void cube.offsetWidth;
-  cube.classList.add('auto');
-  faces.forEach((cls,i)=>{
-    const face=cube.querySelector('.cf.'+cls);
-    const item=d.cube[i]||d.cube[i%d.cube.length];
-    face.innerHTML=`<div class="cf-mu">${item.mu}</div><div class="cf-em">${item.em}</div><div class="cf-tt">${item.tt}</div><div class="cf-ds">${item.ds}</div>`;
-  });
-}
+async function initGestures() {
+  console.log('🚀 Starting enhanced gesture init...');
+  
+  try {
+    const video = document.getElementById('webcam');
+    if (!video) return;
+    
+    if (typeof Hands === 'undefined') {
+      setTimeout(initGestures, 500);
+      return;
+    }
+    
+    hands = new Hands({
+      locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4/${file}`
+    });
 
-function showCards(){
-  const d=DEST[S.dest];
-  go('s-cards');
-  const grid=document.getElementById('cards-grid'); grid.innerHTML='';
-  d.cards.forEach(c=>{
-    const el=document.createElement('div'); el.className='icard';
-    el.innerHTML=`<div class="ic-icon">${c.icon}</div><div class="ic-type">${c.type}</div><h3>${c.title}</h3><p class="ic-prev">${c.prev}</p><div class="ic-exp"><p>${c.det}</p><div class="ic-tip">💡 ${c.tip}</div></div>`;
-    grid.appendChild(el);
-  });
-  buildAvatars();
-}
+    hands.setOptions({
+      maxNumHands: 1,
+      modelComplexity: 1,
+      minDetectionConfidence: 0.6,
+      minTrackingConfidence: 0.6
+    });
 
-function buildAvatars(){
-  const avs=['🧑‍✈️','👩‍🌾','🧑‍🎨','👩‍🚀','🧑‍💼','👩‍🏖️','🧑‍🍳','👩‍🎤'];
-  const grid=document.getElementById('av-grid'); grid.innerHTML='';
-  avs.forEach(av=>{
-    const b=document.createElement('button'); b.className='av-opt'+(S.avatar===av?' sel':''); b.textContent=av;
-    b.onclick=()=>{
-      document.querySelectorAll('.av-opt').forEach(x=>x.classList.remove('sel'));
-      b.classList.add('sel'); S.avatar=av;
-      localStorage.setItem('voy-av',av); updateGav();
-      toast(`Avatar updated to ${av}!`);
-      // fire a mini burst on avatar pick
-      const r=b.getBoundingClientRect();
-      fireBurst(r.left+r.width/2, r.top+r.height/2, '#00b4ff');
+    hands.onResults(onResults);
+
+    const stream = await navigator.mediaDevices.getUserMedia({ 
+      video: { width: 640, height: 480 } 
+    });
+    
+    video.srcObject = stream;
+    isGestureActive = true;
+    toast('🎥 Gesture Engine Ready! Swiping & Cursors active.');
+    
+    const processFrame = async () => {
+      if (isGestureActive && video.readyState === video.HAVE_ENOUGH_DATA) {
+        await hands.send({ image: video });
+      }
+      requestAnimationFrame(processFrame);
     };
-    grid.appendChild(b);
-  });
+    processFrame();
+    
+    // Smooth cursor loop
+    const smoothCursor = () => {
+      handCursorX += (targetX - handCursorX) * 0.15;
+      handCursorY += (targetY - handCursorY) * 0.15;
+      
+      if (document.body.classList.contains('hand-active')) {
+        const dot = document.getElementById('cur-dot');
+        const ring = document.getElementById('cur-ring');
+        if (dot) { dot.style.left = `${handCursorX}px`; dot.style.top = `${handCursorY}px`; }
+        if (ring) { ring.style.left = `${handCursorX}px`; ring.style.top = `${handCursorY}px`; }
+      }
+      requestAnimationFrame(smoothCursor);
+    };
+    smoothCursor();
+    
+  } catch (err) {
+    console.error('❌ Gesture error:', err.message);
+    toast('⚠️ Camera access required for gestures');
+  }
 }
 
-// ══════════════════════════════════════════════════════════════════
-// INIT
-// ══════════════════════════════════════════════════════════════════
-function init(){
-  initCursor();
-  buildNav(); buildPins(); initGlobe();
-  particles('ptcls'); particles('dur-ptcls'); speedLines();
-  initCardTilt();
-  initCubeDrag();
+function onResults(results) {
+  if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0) {
+    document.body.classList.remove('hand-active');
+    lastX = null; lastY = null;
+    return;
+  }
+  
+  document.body.classList.add('hand-active');
+  const landmarks = results.multiHandLandmarks[0];
+  
+  // 1. Update Cursor (Pointer link to index finger tip)
+  const indexTip = landmarks[8];
+  targetX = (1 - indexTip.x) * window.innerWidth; // Mirror for intuitive feel
+  targetY = indexTip.y * window.innerHeight;
 
-  setTimeout(()=>{
-    document.getElementById('loading').classList.add('gone');
-    go('s-globe',false);
-    toast('🌍 Click a destination to begin!');
-    updateGav();
-  },3000);
+  // 2. Detect Gestures
+  const now = Date.now();
+  if (now - lastGestureTime > gestureCooldown) {
+    const gesture = detectGesture(landmarks);
+    if (gesture) {
+      lastGestureTime = now;
+      handleGesture(gesture);
+    }
+  }
 
-  // observe duration section
-  const durSec=document.getElementById('s-dur');
-  new MutationObserver(()=>{ if(durSec.classList.contains('on')){ durInited=false; activateDuration(); } }).observe(durSec,{attributes:true,attributeFilter:['class']});
+  // 3. Detect Swipes
+  detectSwipe(landmarks);
+}
 
-  // preset buttons
-  document.querySelectorAll('.pre-btn').forEach(b=>{
-    b.addEventListener('click',()=>{ document.getElementById('days-in').value=b.dataset.d; S.days=+b.dataset.d; });
-  });
+function detectGesture(landmarks) {
+  const thumbTip = landmarks[4].y;
+  const thumbIP = landmarks[3].y;
+  const wrist = landmarks[0].y;
+  const indexTip = landmarks[8].y;
+  const middleTip = landmarks[12].y;
+  const ringTip = landmarks[16].y;
+  const pinkyTip = landmarks[20].y;
+  const indexBase = landmarks[5].y;
 
-  // cta buttons
-  document.getElementById('btn-start').onclick=()=>showVehicle();
+  // CLOSED FIST (Click/Select) - Tips are close to base
+  const isFist = indexTip > indexBase && middleTip > landmarks[9].y && ringTip > landmarks[13].y && pinkyTip > landmarks[17].y;
+  if (isFist) return 'fist';
+
+  // THUMBS UP
+  const otherFingersDown = indexTip > thumbTip && middleTip > thumbTip;
+  if (thumbTip < wrist - 0.2 && otherFingersDown && thumbTip < thumbIP - 0.05) return 'up';
+  
+  // THUMBS DOWN
+  if (thumbTip > wrist + 0.15 && otherFingersDown && thumbTip > thumbIP + 0.05) return 'down';
+
+  return null;
+}
+
+function detectSwipe(landmarks) {
+  const palm = landmarks[0];
+  const curX = palm.x;
+  const now = Date.now();
+
+  if (lastX !== null && now - lastGestureTime > 500) {
+    const dx = curX - lastX;
+    if (Math.abs(dx) > 0.15) { // Threshold for swipe
+      const dir = dx > 0 ? 'left' : 'right'; // Inverted because mirrored
+      handleGesture(dir === 'left' ? 'down' : 'up');
+      lastGestureTime = now;
+    }
+  }
+  lastX = curX;
+}
+
+function handleGesture(gesture) {
+  const currentIndex = SECS.indexOf(S.cur);
+  console.log('Detected gesture:', gesture);
+
+  if (gesture === 'up' || gesture === 'right') {
+    if (currentIndex < SECS.length - 1) { go(SECS[currentIndex + 1]); toast('👉 Next'); }
+  } else if (gesture === 'down' || gesture === 'left') {
+    if (currentIndex > 0) { go(SECS[currentIndex - 1]); toast('👈 Back'); }
+  } else if (gesture === 'fist') {
+    // Simulate click at current hand cursor position
+    const el = document.elementFromPoint(handCursorX, handCursorY);
+    if (el) {
+      el.click();
+      fireBurst(handCursorX, handCursorY, '#ffffff');
+      toast('✨ Selected');
+    }
+  }
+}
+
+// Global script load verification
+const checkScripts = () => {
+    if (typeof Hands !== 'undefined') {
+        initGestures();
+    } else {
+        setTimeout(checkScripts, 500);
+    }
+};
+checkScripts();
+
+</script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+<script src="https://replit-cdn.com/replit-pill/replit-pill.global.js" data-referral-code="ttr3ynfkk209" data-repl-id="c5df46d4-4675-4745-9883-a8d0aa3bf15b"></script>
+hicle();
   document.getElementById('btn-dur').onclick=()=>{
     const v=+document.getElementById('days-in').value;
     if(!v||v<1){toast('⚠️ Enter at least 1 day');return;}
