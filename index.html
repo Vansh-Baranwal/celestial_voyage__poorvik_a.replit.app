@@ -1037,7 +1037,120 @@ function showTimeline(){
   const ext=['🌅','🗺️','🏖️','🎭','🍽️','🚶','🎪','🌃','🎵','🏛️','🌿','🛍️','🧭','🌄'];
   for(let i=0;i<days;i++){
     const item=d.plan[i]||{icon:ext[i%ext.length],loc:`Day ${i+1} Adventure`,act:`Explore hidden gems and local markets. Rest, relax and absorb the culture of ${d.name}.`,tags:['explore','culture']};
-    const el=document.createElement('// ══════════════════════════════════════════════════════════════════
+    const el=document.createElement('div'); el.className='tl-item';
+    el.innerHTML=`<div class="tl-dot">${item.icon}</div><div class="tl-body"><div class="day-tag">Day ${i+1}</div><h3>${item.loc}</h3><p>${item.act}</p><div class="tl-tags">${(item.tags||[]).map(t=>`<span class="tag">${t}</span>`).join('')}</div></div>`;
+    wrap.appendChild(el);
+  }
+  setTimeout(()=>{ wrap.querySelectorAll('.tl-item').forEach((el,i)=>setTimeout(()=>el.classList.add('v'),i*140)); },200);
+}
+
+function showJourney(){
+  const d=DEST[S.dest];
+  go('s-jrn');
+  document.getElementById('jd-em').textContent=d.emoji;
+  document.getElementById('jd-nm').textContent=d.name;
+  document.getElementById('jv').innerHTML=carSVG(d.vehicle,d.color);
+  setTimeout(()=>{ toast(`🎉 Welcome to ${d.name}!`); setTimeout(showCube,1400); },5500);
+}
+
+function showCube(){
+  const d=DEST[S.dest];
+  go('s-cube');
+  document.getElementById('cube-title').textContent=`Discover ${d.name}`;
+  const faces=['fr','bk','lf','rt','tp','bt'];
+  const cube=document.getElementById('cube3');
+  // restart auto rotation
+  cube.classList.remove('auto');
+  void cube.offsetWidth;
+  cube.classList.add('auto');
+  faces.forEach((cls,i)=>{
+    const face=cube.querySelector('.cf.'+cls);
+    const item=d.cube[i]||d.cube[i%d.cube.length];
+    face.innerHTML=`<div class="cf-mu">${item.mu}</div><div class="cf-em">${item.em}</div><div class="cf-tt">${item.tt}</div><div class="cf-ds">${item.ds}</div>`;
+  });
+}
+
+function showCards(){
+  const d=DEST[S.dest];
+  go('s-cards');
+  const grid=document.getElementById('cards-grid'); grid.innerHTML='';
+  d.cards.forEach(c=>{
+    const el=document.createElement('div'); el.className='icard';
+    el.innerHTML=`<div class="ic-icon">${c.icon}</div><div class="ic-type">${c.type}</div><h3>${c.title}</h3><p class="ic-prev">${c.prev}</p><div class="ic-exp"><p>${c.det}</p><div class="ic-tip">💡 ${c.tip}</div></div>`;
+    grid.appendChild(el);
+  });
+  buildAvatars();
+}
+
+function buildAvatars(){
+  const avs=['🧑‍✈️','👩‍🌾','🧑‍🎨','👩‍🚀','🧑‍💼','👩‍🏖️','🧑‍🍳','👩‍🎤'];
+  const grid=document.getElementById('av-grid'); grid.innerHTML='';
+  avs.forEach(av=>{
+    const b=document.createElement('button'); b.className='av-opt'+(S.avatar===av?' sel':''); b.textContent=av;
+    b.onclick=()=>{
+      document.querySelectorAll('.av-opt').forEach(x=>x.classList.remove('sel'));
+      b.classList.add('sel'); S.avatar=av;
+      localStorage.setItem('voy-av',av); updateGav();
+      toast(`Avatar updated to ${av}!`);
+      // fire a mini burst on avatar pick
+      const r=b.getBoundingClientRect();
+      fireBurst(r.left+r.width/2, r.top+r.height/2, '#00b4ff');
+    };
+    grid.appendChild(b);
+  });
+}
+
+// ══════════════════════════════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════════════════════════════
+function init(){
+  initCursor();
+  buildNav(); buildPins(); initGlobe();
+  particles('ptcls'); particles('dur-ptcls'); speedLines();
+  initCardTilt();
+  initCubeDrag();
+
+  setTimeout(()=>{
+    document.getElementById('loading').classList.add('gone');
+    go('s-globe',false);
+    toast('🌍 Click a destination to begin!');
+    updateGav();
+  },3000);
+
+  // observe duration section
+  const durSec=document.getElementById('s-dur');
+  new MutationObserver(()=>{ if(durSec.classList.contains('on')){ durInited=false; activateDuration(); } }).observe(durSec,{attributes:true,attributeFilter:['class']});
+
+  // preset buttons
+  document.querySelectorAll('.pre-btn').forEach(b=>{
+    b.addEventListener('click',()=>{ document.getElementById('days-in').value=b.dataset.d; S.days=+b.dataset.d; });
+  });
+
+  // cta buttons
+  document.getElementById('btn-start').onclick=()=>showVehicle();
+  document.getElementById('btn-dur').onclick=()=>{
+    const v=+document.getElementById('days-in').value;
+    if(!v||v<1){toast('⚠️ Enter at least 1 day');return;}
+    S.days=Math.min(v,14);
+    toast(`Planning a ${S.days}-day trip to ${DEST[S.dest]?.name}!`);
+    setTimeout(showTimeline,380);
+  };
+  document.getElementById('btn-tl').onclick=()=>showJourney();
+  document.getElementById('btn-cube').onclick=()=>showCards();
+  document.getElementById('btn-restart').onclick=()=>{
+    S.dest=null; S.hist=[];
+    go('s-globe',false);
+    toast('🌍 Choose another destination!');
+  };
+  document.getElementById('back').onclick=()=>{ const p=S.hist.pop(); if(p) go(p,false); };
+  if(S.avatar) updateGav();
+}
+
+document.addEventListener('DOMContentLoaded', init);
+</script>
+
+<script>
+// ══════════════════════════════════════════════════════════════════
 // ENHANCED GESTURE CONTROL WITH MEDIAPIPE
 // ══════════════════════════════════════════════════════════════════
 let hands;
@@ -1215,157 +1328,5 @@ checkScripts();
 
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
-<script src="https://replit-cdn.com/replit-pill/replit-pill.global.js" data-referral-code="ttr3ynfkk209" data-repl-id="c5df46d4-4675-4745-9883-a8d0aa3bf15b"></script>
-hicle();
-  document.getElementById('btn-dur').onclick=()=>{
-    const v=+document.getElementById('days-in').value;
-    if(!v||v<1){toast('⚠️ Enter at least 1 day');return;}
-    S.days=Math.min(v,14);
-    toast(`Planning a ${S.days}-day trip to ${DEST[S.dest]?.name}!`);
-    setTimeout(showTimeline,380);
-  };
-  document.getElementById('btn-tl').onclick=()=>showJourney();
-  document.getElementById('btn-cube').onclick=()=>showCards();
-  document.getElementById('btn-restart').onclick=()=>{
-    S.dest=null; S.hist=[];
-    go('s-globe',false);
-    toast('🌍 Choose another destination!');
-  };
-  document.getElementById('back').onclick=()=>{ const p=S.hist.pop(); if(p) go(p,false); };
-  if(S.avatar) updateGav();
-}
-
-document.addEventListener('DOMContentLoaded', init);
-</script>
-<script>
-// ══════════════════════════════════════════════════════════════════
-// GESTURE CONTROL WITH MEDIAPIPE - THUMBS UP/DOWN
-// ══════════════════════════════════════════════════════════════════
-let hands;
-let lastGestureTime = 0;
-const gestureCooldown = 800;
-let isGestureActive = false;
-
-async function initGestures() {
-  console.log('🚀 Starting gesture init...');
-  
-  try {
-    const video = document.getElementById('webcam');
-    if (!video) {
-      console.error('❌ Video element not found');
-      return;
-    }
-    
-    if (typeof Hands === 'undefined') {
-      console.log('⏳ Waiting for MediaPipe...');
-      setTimeout(initGestures, 500);
-      return;
-    }
-    
-    console.log('✅ Hands loaded');
-    
-    hands = new Hands({
-      locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4/${file}`
-    });
-
-    hands.setOptions({
-      maxNumHands: 1,
-      modelComplexity: 0,
-      minDetectionConfidence: 0.5,
-      minTrackingConfidence: 0.5
-    });
-
-    hands.onResults(onResults);
-
-    // Get camera stream
-    const stream = await navigator.mediaDevices.getUserMedia({ 
-      video: { width: 640, height: 480 } 
-    });
-    
-    video.srcObject = stream;
-    console.log('✅ Camera stream active');
-    
-    isGestureActive = true;
-    toast('🎥 Gesture control ON! Show thumbs up/down');
-    
-    // Process frames continuously
-    const processFrame = async () => {
-      if (isGestureActive && video.readyState === video.HAVE_ENOUGH_DATA) {
-        await hands.send({ image: video });
-      }
-      requestAnimationFrame(processFrame);
-    };
-    processFrame();
-    
-  } catch (err) {
-    console.error('❌ Gesture error:', err.message);
-    toast('⚠️ Camera error: ' + err.message);
-  }
-}
-
-function onResults(results) {
-  if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0) return;
-  
-  const landmarks = results.multiHandLandmarks[0];
-  const gesture = detectGesture(landmarks);
-  
-  if (gesture && Date.now() - lastGestureTime > gestureCooldown) {
-    console.log('🎯 Detected:', gesture);
-    lastGestureTime = Date.now();
-    handleGesture(gesture);
-  }
-}
-
-function detectGesture(landmarks) {
-  // Hand landmarks: thumb=0-4, index=5-8, middle=9-12, ring=13-16, pinky=17-20
-  // Each finger: mcp, pip, dip, tip
-  const thumbTip = landmarks[4].y;      // Index 4: thumb tip
-  const thumbIP = landmarks[3].y;       // Index 3: thumb IP joint
-  const wrist = landmarks[0].y;         // Index 0: wrist
-  
-  // Other fingers (need to check tips are below thumb)
-  const indexTip = landmarks[8].y;
-  const middleTip = landmarks[12].y;
-  const ringTip = landmarks[16].y;
-  const pinkyTip = landmarks[20].y;
-  
-  // Check if other fingers are extended down (away from thumb)
-  const otherFingersDown = indexTip > thumbTip && middleTip > thumbTip && ringTip > thumbTip && pinkyTip > thumbTip;
-  
-  // THUMBS UP: thumb tip is well above wrist
-  if (thumbTip < wrist - 0.2 && otherFingersDown && thumbTip < thumbIP - 0.12) {
-    return 'up';
-  }
-  
-  // THUMBS DOWN: thumb tip is well below wrist  
-  if (thumbTip > wrist + 0.2 && otherFingersDown && thumbTip > thumbIP + 0.12) {
-    return 'down';
-  }
-  
-  return null;
-}
-
-function handleGesture(gesture) {
-  const currentIndex = SECS.indexOf(S.cur);
-  
-  if (gesture === 'up' && currentIndex < SECS.length - 1) {
-    go(SECS[currentIndex + 1]);
-    toast('👍 Next!');
-  } else if (gesture === 'down' && currentIndex > 0) {
-    go(SECS[currentIndex - 1]);
-    toast('👎 Back!');
-  }
-}
-
-// Start gesture control when scripts are loaded
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', () => {
-    setTimeout(() => initGestures(), 1500);
-  });
-} else {
-  setTimeout(() => initGestures(), 1500);
-}
-</script>
-<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4/hands.js"></script>
 <script src="https://replit-cdn.com/replit-pill/replit-pill.global.js" data-referral-code="ttr3ynfkk209" data-repl-id="c5df46d4-4675-4745-9883-a8d0aa3bf15b"></script></body>
 </html>
